@@ -12,7 +12,7 @@ engine = create_engine(
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create base class for models
+# Create base class for models - must be imported by all models
 Base = declarative_base()
 
 def get_db():

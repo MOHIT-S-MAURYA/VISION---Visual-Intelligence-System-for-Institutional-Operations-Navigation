@@ -1,43 +1,40 @@
 # Core FastAPI and web framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-jinja2==3.1.2
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
 
-# Computer Vision and Face Recognition
-opencv-python==4.8.1.78
-face-recognition==1.3.0
-dlib==19.24.2
-numpy==1.24.3
-pillow==10.0.1
+# Basic dependencies first
+numpy>=1.21.0
+pillow>=9.0.0
+
+# Computer Vision (install after numpy)
+opencv-python>=4.5.0
+
+# Face Recognition (simplified approach)
+face-recognition>=1.3.0
 
 # Machine Learning and Embeddings
-torch==2.1.0
-torchvision==0.16.0
-ultralytics==8.0.196
-faiss-cpu==1.7.4
+faiss-cpu>=1.7.0
 
 # Database
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-alembic==1.12.1
+sqlalchemy>=2.0.0
+alembic>=1.10.0
 
 # Authentication and Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.0
 
 # Configuration and Environment
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.0.3
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
 # Utilities
-python-dateutil==2.8.2
-aiofiles==23.2.1
-httpx==0.25.2
+python-dateutil>=2.8.0
+aiofiles>=0.8.0
+httpx>=0.24.0
 
 # Development and Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-black==23.10.1
-flake8==6.1.0
+pytest>=7.0.0
+pytest-asyncio>=0.20.0

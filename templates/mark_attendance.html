@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance - {{ system_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .vision-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+        .attendance-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="vision-header">
+        <div class="container">
+            <div class="text-center">
+                <h2>🎯 {{ system_name }} - Mark Attendance</h2>
+                <p class="mb-0">{{ system_tagline }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card attendance-card">
+                    <div class="card-header">
+                        <h4>📋 Create Attendance Session</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="sessionForm">
+                            <div class="mb-3">
+                                <label for="session_name" class="form-label">Session Name</label>
+                                <input type="text" class="form-control" id="session_name" name="session_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="course" class="form-label">Course</label>
+                                <input type="text" class="form-control" id="course" name="course" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="section" class="form-label">Section</label>
+                                <input type="text" class="form-control" id="section" name="section" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="start_time" class="form-label">Start Time</label>
+                                <input type="time" class="form-control" id="start_time" name="start_time" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Session</button>
+                        </form>
+                        <div id="sessionResult" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card attendance-card">
+                    <div class="card-header">
+                        <h4>🤖 Face Recognition Attendance</h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            <i class="fas fa-camera fa-3x text-muted"></i>
+                        </div>
+                        <h5>AI-Powered Face Recognition</h5>
+                        <p class="text-muted">Face recognition feature is under development. Use manual attendance for now.</p>
+                        <button class="btn btn-outline-primary" disabled>
+                            <i class="fas fa-camera"></i> Start Face Recognition
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card attendance-card">
+            <div class="card-header">
+                <h4>📊 Active Sessions</h4>
+            </div>
+            <div class="card-body">
+                <div id="activeSessions">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading active sessions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center">
+            <a href="/" class="btn btn-secondary btn-lg">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Create session form handler
+        document.getElementById('sessionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            const resultDiv = document.getElementById('sessionResult');
+            
+            try {
+                const response = await fetch('/api/attendance/sessions/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6>✅ Success!</h6>
+                            <p>${result.message}</p>
+                        </div>
+                    `;
+                    this.reset();
+                    loadActiveSessions(); // Refresh the sessions list
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h6>❌ Error</h6>
+                            <p>${result.detail || 'Failed to create session'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6>❌ Error</h6>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+        
+        // Load active sessions
+        async function loadActiveSessions() {
+            try {
+                const response = await fetch('/api/attendance/sessions/');
+                const data = await response.json();
+                
+                const container = document.getElementById('activeSessions');
+                
+                if (data.sessions && data.sessions.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Session Name</th>
+                                        <th>Course</th>
+                                        <th>Section</th>
+                                        <th>Date</th>
+                                        <th>Start Time</th>
+                                        <th>Status</th>
+                                        <th>Created By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.sessions.map(session => `
+                                        <tr>
+                                            <td>${session.session_name}</td>
+                                            <td>${session.course}</td>
+                                            <td>${session.section}</td>
+                                            <td>${session.date}</td>
+                                            <td>${session.start_time}</td>
+                                            <td>
+                                                <span class="badge ${session.status === 'Active' ? 'bg-success' : 'bg-secondary'}">
+                                                    ${session.status}
+                                                </span>
+                                            </td>
+                                            <td>${session.created_by}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-info">
+                            <h6>📝 No Active Sessions</h6>
+                            <p>No attendance sessions have been created yet.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('activeSessions').innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6>❌ Error</h6>
+                        <p>Failed to load sessions: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load sessions when page loads
+        loadActiveSessions();
+        
+        // Set current time as default
+        document.getElementById('start_time').value = new Date().toTimeString().slice(0,5);
+    </script>
+</body>
+</html>
