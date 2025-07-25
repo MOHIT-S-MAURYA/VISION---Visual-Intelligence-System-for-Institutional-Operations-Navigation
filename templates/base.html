@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VISION - Visual Intelligence System{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link href="/static/css/style.css" rel="stylesheet">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-eye me-2"></i>
+                <strong>VISION</strong>
+                <small class="d-none d-md-inline ms-2 opacity-75">Visual Intelligence System</small>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/register-student">
+                            <i class="fas fa-user-plus me-1"></i>Register Student
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/mark-attendance">
+                            <i class="fas fa-camera me-1"></i>Mark Attendance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/view-students">
+                            <i class="fas fa-users me-1"></i>Students
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/attendance-reports">
+                            <i class="fas fa-chart-bar me-1"></i>Reports
+                        </a>
+                    </li>
+                </ul>
+                
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/docs" target="_blank">
+                            <i class="fas fa-code me-1"></i>API
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/health" target="_blank">
+                            <i class="fas fa-heartbeat me-1"></i>Status
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container-fluid py-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light text-center py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-8 text-md-start">
+                    <h5 class="mb-2">
+                        <i class="fas fa-eye me-2"></i>
+                        <strong>VISION</strong>
+                    </h5>
+                    <p class="mb-1 text-light-emphasis">
+                        <strong>V</strong>isual <strong>I</strong>ntelligence <strong>S</strong>ystem for 
+                        <strong>I</strong>nstitutional <strong>O</strong>perations & <strong>N</strong>avigation
+                    </p>
+                    <p class="mb-0 small text-muted">
+                        Advanced AI-powered attendance system using computer vision
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <p class="mb-2">
+                        <a href="/health" class="text-light text-decoration-none">
+                            <i class="fas fa-heartbeat me-1"></i>System Status
+                        </a>
+                    </p>
+                    <p class="mb-0">
+                        <a href="/docs" class="text-light text-decoration-none">
+                            <i class="fas fa-book me-1"></i>Documentation
+                        </a>
+                    </p>
+                </div>
+            </div>
+            <hr class="my-3 text-muted">
+            <p class="mb-0 small text-muted">
+                &copy; 2025 VISION System | Built with AI & Computer Vision Technology
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="/static/js/app.js"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

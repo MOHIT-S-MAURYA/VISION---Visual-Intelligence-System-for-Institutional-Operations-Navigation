@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Register Student - AI Attendance System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-user-plus me-2"></i>
+                        Register New Student
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Success/Error Messages -->
+                    <div id="messageContainer"></div>
+                    
+                    <form id="registerStudentForm" enctype="multipart/form-data">
+                        <!-- Student Information -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="studentName" class="form-label">
+                                    <i class="fas fa-user me-1"></i>Full Name *
+                                </label>
+                                <input type="text" class="form-control" id="studentName" name="name" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="rollNumber" class="form-label">
+                                    <i class="fas fa-id-card me-1"></i>Roll Number *
+                                </label>
+                                <input type="text" class="form-control" id="rollNumber" name="roll_number" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">
+                                    <i class="fas fa-envelope me-1"></i>Email
+                                </label>
+                                <input type="email" class="form-control" id="email" name="email">
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label">
+                                    <i class="fas fa-phone me-1"></i>Phone Number
+                                </label>
+                                <input type="tel" class="form-control" id="phone" name="phone">
+                            </div>
+                        </div>
+                        
+                        <!-- Face Images Upload -->
+                        <div class="mb-4">
+                            <label for="faceImages" class="form-label">
+                                <i class="fas fa-camera me-1"></i>Face Images *
+                            </label>
+                            <input type="file" class="form-control" id="faceImages" name="files" 
+                                   multiple accept="image/*" required>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Upload 2-5 clear photos of the student's face. Multiple angles recommended for better accuracy.
+                            </div>
+                        </div>
+                        
+                        <!-- Image Preview -->
+                        <div id="imagePreview" class="mb-4" style="display: none;">
+                            <h6><i class="fas fa-eye me-1"></i>Image Preview:</h6>
+                            <div id="previewContainer" class="d-flex flex-wrap gap-2"></div>
+                        </div>
+                        
+                        <!-- Guidelines -->
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-lightbulb me-1"></i>Photo Guidelines:</h6>
+                            <ul class="mb-0">
+                                <li>Use well-lit, clear photos</li>
+                                <li>Face should be clearly visible and centered</li>
+                                <li>Avoid sunglasses, masks, or heavy shadows</li>
+                                <li>Multiple angles (front, slightly left/right) improve recognition</li>
+                                <li>Supported formats: JPG, PNG, WEBP</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>
+                                Register Student
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Registration Process -->
+            <div class="card mt-4 shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-1"></i>
+                        How Registration Works
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="feature-icon bg-primary text-white rounded-circle mx-auto mb-2">
+                                <i class="fas fa-upload"></i>
+                            </div>
+                            <h6>1. Upload Photos</h6>
+                            <p class="text-muted small">Upload clear face images of the student</p>
+                        </div>
+                        
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="feature-icon bg-success text-white rounded-circle mx-auto mb-2">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <h6>2. AI Processing</h6>
+                            <p class="text-muted small">System creates unique face embeddings</p>
+                        </div>
+                        
+                        <div class="col-md-4 text-center mb-3">
+                            <div class="feature-icon bg-info text-white rounded-circle mx-auto mb-2">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <h6>3. Ready for Attendance</h6>
+                            <p class="text-muted small">Student can now be recognized in class photos</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('registerStudentForm');
+    const fileInput = document.getElementById('faceImages');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewContainer = document.getElementById('previewContainer');
+    const submitBtn = document.getElementById('submitBtn');
+    const messageContainer = document.getElementById('messageContainer');
+    
+    // Image preview functionality
+    fileInput.addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        previewContainer.innerHTML = '';
+        
+        if (files.length > 0) {
+            imagePreview.style.display = 'block';
+            
+            files.forEach((file, index) => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'img-thumbnail';
+                        img.style.width = '100px';
+                        img.style.height = '100px';
+                        img.style.objectFit = 'cover';
+                        previewContainer.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        } else {
+            imagePreview.style.display = 'none';
+        }
+    });
+    
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registering...';
+        
+        try {
+            // Step 1: Create student
+            const studentData = {
+                name: document.getElementById('studentName').value,
+                roll_number: document.getElementById('rollNumber').value,
+                email: document.getElementById('email').value || null,
+                phone: document.getElementById('phone').value || null
+            };
+            
+            const studentResponse = await fetch('/api/students/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(studentData)
+            });
+            
+            if (!studentResponse.ok) {
+                const error = await studentResponse.json();
+                throw new Error(error.detail || 'Failed to create student');
+            }
+            
+            const student = await studentResponse.json();
+            
+            // Step 2: Upload face images
+            const formData = new FormData();
+            const files = document.getElementById('faceImages').files;
+            
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            
+            const faceResponse = await fetch(`/api/students/${student.id}/register-faces`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!faceResponse.ok) {
+                const error = await faceResponse.json();
+                throw new Error(error.detail || 'Failed to register face images');
+            }
+            
+            const faceResult = await faceResponse.json();
+            
+            // Success message
+            showMessage('success', `
+                <strong>Success!</strong> Student "${student.name}" has been registered successfully.
+                <br><small>Processed ${faceResult.processed_images} face images.</small>
+            `);
+            
+            // Reset form
+            form.reset();
+            imagePreview.style.display = 'none';
+            previewContainer.innerHTML = '';
+            
+        } catch (error) {
+            showMessage('danger', `<strong>Error:</strong> ${error.message}`);
+        } finally {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Register Student';
+        }
+    });
+    
+    function showMessage(type, message) {
+        messageContainer.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}

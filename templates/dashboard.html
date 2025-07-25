@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}VISION Dashboard - Visual Intelligence System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Hero Section -->
+    <div class="hero-section text-center text-white p-5 mb-5 rounded">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="hero-icon mb-4">
+                    <i class="fas fa-eye fa-4x opacity-90"></i>
+                </div>
+                <h1 class="display-4 fw-bold mb-3">Welcome to VISION</h1>
+                <h4 class="fw-light mb-3 opacity-90">
+                    <span class="badge bg-light text-primary me-1">V</span>isual
+                    <span class="badge bg-light text-primary me-1 ms-1">I</span>ntelligence
+                    <span class="badge bg-light text-primary me-1 ms-1">S</span>ystem for
+                    <span class="badge bg-light text-primary me-1 ms-1">I</span>nstitutional
+                    <span class="badge bg-light text-primary me-1 ms-1">O</span>perations &
+                    <span class="badge bg-light text-primary me-1 ms-1">N</span>avigation
+                </h4>
+                <p class="lead opacity-85">
+                    Advanced AI-powered attendance system using computer vision technology
+                </p>
+                <p class="mb-0">
+                    <small class="opacity-75">Today: {{ today_date }}</small>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System Stats -->
+    <div class="row mb-5">
+        <div class="col-md-3 mb-4">
+            <div class="card stat-card bg-primary text-white h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-users fa-3x mb-3 opacity-75"></i>
+                    <h2 class="display-6 fw-bold">{{ total_students }}</h2>
+                    <p class="mb-0 fw-semibold">Registered Students</p>
+                    <small class="opacity-75">Active in system</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-4">
+            <div class="card stat-card bg-success text-white h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-check-circle fa-3x mb-3 opacity-75"></i>
+                    <h2 class="display-6 fw-bold">{{ today_attendance }}</h2>
+                    <p class="mb-0 fw-semibold">Present Today</p>
+                    <small class="opacity-75">Marked attendance</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-4">
+            <div class="card stat-card bg-info text-white h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-percentage fa-3x mb-3 opacity-75"></i>
+                    <h2 class="display-6 fw-bold">{{ attendance_percentage }}%</h2>
+                    <p class="mb-0 fw-semibold">Attendance Rate</p>
+                    <small class="opacity-75">Today's percentage</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-4">
+            <div class="card stat-card bg-warning text-white h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-bolt fa-3x mb-3 opacity-75"></i>
+                    <h2 class="display-6 fw-bold">&lt; 5s</h2>
+                    <p class="mb-0 fw-semibold">Response Time</p>
+                    <small class="opacity-75">AI processing speed</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-gradient bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>
+                        Quick Actions
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <a href="/register-student" class="btn btn-outline-primary btn-lg w-100 h-100 d-flex flex-column justify-content-center text-decoration-none">
+                                <i class="fas fa-user-plus fa-3x mb-3 text-primary"></i>
+                                <strong>Register Student</strong>
+                                <small class="text-muted mt-1">Add new student with face images</small>
+                            </a>
+                        </div>
+                        
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <a href="/mark-attendance" class="btn btn-outline-success btn-lg w-100 h-100 d-flex flex-column justify-content-center text-decoration-none">
+                                <i class="fas fa-camera fa-3x mb-3 text-success"></i>
+                                <strong>Mark Attendance</strong>
+                                <small class="text-muted mt-1">Upload classroom photo</small>
+                            </a>
+                        </div>
+                        
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <a href="/view-students" class="btn btn-outline-info btn-lg w-100 h-100 d-flex flex-column justify-content-center text-decoration-none">
+                                <i class="fas fa-users fa-3x mb-3 text-info"></i>
+                                <strong>View Students</strong>
+                                <small class="text-muted mt-1">Manage student database</small>
+                            </a>
+                        </div>
+                        
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <a href="/attendance-reports" class="btn btn-outline-warning btn-lg w-100 h-100 d-flex flex-column justify-content-center text-decoration-none">
+                                <i class="fas fa-chart-bar fa-3x mb-3 text-warning"></i>
+                                <strong>View Reports</strong>
+                                <small class="text-muted mt-1">Analytics & insights</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System Features & Today's Overview -->
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-day me-2 text-primary"></i>
+                        Today's Overview - {{ today_date }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="todayAttendance">
+                        <div class="d-flex justify-content-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading attendance data...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs me-2 text-primary"></i>
+                        VISION Capabilities
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="feature-list">
+                        <div class="feature-item d-flex align-items-center mb-3">
+                            <div class="feature-icon bg-success text-white rounded-circle me-3">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <div>
+                                <strong>AI Face Recognition</strong>
+                                <br><small class="text-muted">≥95% accuracy rate</small>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-item d-flex align-items-center mb-3">
+                            <div class="feature-icon bg-primary text-white rounded-circle me-3">
+                                <i class="fas fa-eye"></i>
+                            </div>
+                            <div>
+                                <strong>Computer Vision</strong>
+                                <br><small class="text-muted">Multi-face detection</small>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-item d-flex align-items-center mb-3">
+                            <div class="feature-icon bg-info text-white rounded-circle me-3">
+                                <i class="fas fa-tachometer-alt"></i>
+                            </div>
+                            <div>
+                                <strong>Real-time Processing</strong>
+                                <br><small class="text-muted">&lt; 5 second response</small>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-item d-flex align-items-center mb-3">
+                            <div class="feature-icon bg-warning text-white rounded-circle me-3">
+                                <i class="fas fa-expand-arrows-alt"></i>
+                            </div>
+                            <div>
+                                <strong>Scalable System</strong>
+                                <br><small class="text-muted">Up to 100 students/class</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="d-grid gap-2">
+                        <a href="/docs" class="btn btn-outline-primary btn-sm" target="_blank">
+                            <i class="fas fa-code me-1"></i>
+                            API Documentation
+                        </a>
+                        <a href="/health" class="btn btn-outline-success btn-sm" target="_blank">
+                            <i class="fas fa-heartbeat me-1"></i>
+                            System Health
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadTodayAttendance();
+    
+    async function loadTodayAttendance() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch(`/api/attendance/${today}`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                displayAttendance(data);
+            } else {
+                document.getElementById('todayAttendance').innerHTML = `
+                    <div class="alert alert-info border-0">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle fa-2x text-info me-3"></i>
+                            <div>
+                                <h6 class="mb-1">No attendance data for today</h6>
+                                <p class="mb-2 small">Start by registering students and marking attendance.</p>
+                                <a href="/mark-attendance" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-camera me-1"></i>Mark Attendance
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            document.getElementById('todayAttendance').innerHTML = `
+                <div class="alert alert-warning border-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Connection Issue:</strong> Unable to load attendance data.
+                </div>
+            `;
+        }
+    }
+    
+    function displayAttendance(data) {
+        const container = document.getElementById('todayAttendance');
+        
+        if (data.records.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info border-0">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-calendar-plus fa-2x text-info me-3"></i>
+                        <div>
+                            <h6 class="mb-1">Ready to take attendance</h6>
+                            <p class="mb-2 small">Upload a classroom photo to automatically mark attendance.</p>
+                            <a href="/mark-attendance" class="btn btn-sm btn-success">
+                                <i class="fas fa-camera me-1"></i>Take Attendance
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="bg-light p-3 rounded border">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1"><i class="fas fa-users text-primary me-1"></i> Students</h6>
+                                <span class="h5 mb-0">${data.total_students} Total</span>
+                            </div>
+                            <i class="fas fa-users fa-2x text-primary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="bg-light p-3 rounded border">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1"><i class="fas fa-check-circle text-success me-1"></i> Present</h6>
+                                <span class="h5 mb-0">${data.present_count} (${data.attendance_percentage}%)</span>
+                            </div>
+                            <i class="fas fa-check-circle fa-2x text-success opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (data.records.length <= 5) {
+            html += '<h6><i class="fas fa-list me-1"></i>Recent Attendance:</h6>';
+            html += '<div class="list-group">';
+            data.records.slice(0, 5).forEach(record => {
+                const statusClass = record.status === 'Present' ? 'success' : 'danger';
+                const statusIcon = record.status === 'Present' ? 'check-circle' : 'times-circle';
+                html += `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${record.student_name}</strong>
+                            <br><small class="text-muted">${record.roll_number}</small>
+                        </div>
+                        <span class="badge bg-${statusClass}">
+                            <i class="fas fa-${statusIcon} me-1"></i>${record.status}
+                        </span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        } else {
+            html += `
+                <div class="text-center py-3">
+                    <h5 class="text-success mb-2">
+                        <i class="fas fa-check-circle me-2"></i>
+                        ${data.records.length} attendance records
+                    </h5>
+                    <p class="text-muted mb-3">Attendance has been successfully recorded for today</p>
+                    <a href="/attendance-reports" class="btn btn-primary">
+                        <i class="fas fa-chart-bar me-1"></i>View Full Report
+                    </a>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %}
