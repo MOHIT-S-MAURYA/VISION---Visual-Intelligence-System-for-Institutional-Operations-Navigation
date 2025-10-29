@@ -2,18 +2,61 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.files.base import ContentFile
 import requests
 import base64
 import io
 import os
-from .models import Student, Subject
-from .serializers import StudentSerializer, SubjectSerializer
+from .models import Student, Subject, Teacher
+from .serializers import StudentSerializer, SubjectSerializer, TeacherSerializer
+
+
+class TeacherViewSet(viewsets.ModelViewSet):
+    """ViewSet for teacher registration and management"""
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+    
+    def get_permissions(self):
+        # Allow registration without authentication
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Get current teacher's profile"""
+        try:
+            teacher = Teacher.objects.get(user=request.user)
+            serializer = self.get_serializer(teacher)
+            return Response(serializer.data)
+        except Teacher.DoesNotExist:
+            return Response(
+                {'error': 'Teacher profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     parser_classes = [MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        """Filter students by teacher's department"""
+        queryset = Student.objects.all()
+        
+        # If user is authenticated and has a teacher profile, filter by department
+        if self.request.user.is_authenticated:
+            try:
+                teacher = Teacher.objects.get(user=self.request.user)
+                queryset = queryset.filter(department=teacher.department)
+            except Teacher.DoesNotExist:
+                # If no teacher profile, allow superusers to see all
+                if not self.request.user.is_superuser:
+                    queryset = queryset.none()
+        
+        return queryset
     
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def register_with_face(self, request):
@@ -194,8 +237,20 @@ class SubjectViewSet(viewsets.ModelViewSet):
     serializer_class = SubjectSerializer
     
     def get_queryset(self):
-        """Filter subjects by department and year if provided"""
+        """Filter subjects by query params and teacher's department"""
         queryset = Subject.objects.all()
+        
+        # If user is authenticated and has a teacher profile, filter by their department
+        if self.request.user.is_authenticated:
+            try:
+                teacher = Teacher.objects.get(user=self.request.user)
+                queryset = queryset.filter(department=teacher.department)
+            except Teacher.DoesNotExist:
+                # If no teacher profile, allow superusers to see all
+                if not self.request.user.is_superuser:
+                    queryset = queryset.none()
+        
+        # Additional filtering by query parameters
         department = self.request.query_params.get('department', None)
         class_year = self.request.query_params.get('class_year', None)
         

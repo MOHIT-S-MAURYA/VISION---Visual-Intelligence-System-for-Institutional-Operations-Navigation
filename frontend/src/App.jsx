@@ -7,6 +7,7 @@ import Reports from "./pages/Reports";
 import Students from "./pages/Students";
 import SubjectsManagement from "./pages/SubjectsManagement";
 import Login from "./pages/Login";
+import TeacherRegistration from "./pages/TeacherRegistration";
 
 function ProtectedRoute({ children }) {
   const [authed, setAuthed] = useState(
@@ -114,6 +115,7 @@ export default function App() {
             }
           />
           <Route path="/login" element={<Login />} />
+          <Route path="/teacher-register" element={<TeacherRegistration />} />
         </Routes>
       </main>
     </div>

@@ -20,6 +20,38 @@ export default function SubjectsManagement() {
     subject_name: "",
     subject_code: "",
   });
+  const [teacherDepartment, setTeacherDepartment] = useState(null);
+  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
+
+  // Fetch teacher's department on mount
+  useEffect(() => {
+    const fetchTeacherInfo = async () => {
+      const token = localStorage.getItem("teacher_token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.teacher && data.teacher.department) {
+            setTeacherDepartment(data.teacher.department);
+            setFilters((prev) => ({
+              ...prev,
+              department: data.teacher.department,
+            }));
+            setIsDepartmentLocked(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching teacher info:", error);
+      }
+    };
+
+    fetchTeacherInfo();
+  }, []);
 
   // Get available years based on selected department
   const availableFilterYears = filters.department
@@ -71,7 +103,7 @@ export default function SubjectsManagement() {
   function openCreateModal() {
     setEditingSubject(null);
     setFormData({
-      department: "",
+      department: teacherDepartment || "",
       class_year: "",
       subject_name: "",
       subject_code: "",
@@ -202,7 +234,12 @@ export default function SubjectsManagement() {
             setFilters((f) => ({ ...f, department: v, classYear: "" }));
           }}
           options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
-          hint="Filter by department"
+          hint={
+            isDepartmentLocked
+              ? "🔒 Showing your department only"
+              : "Filter by department"
+          }
+          disabled={isDepartmentLocked}
         />
         <Select
           label="Class / Year"
@@ -325,7 +362,12 @@ export default function SubjectsManagement() {
                   value: d.value,
                   label: d.label,
                 }))}
-                hint="Select department"
+                hint={
+                  isDepartmentLocked
+                    ? "🔒 Department is locked to your assigned department"
+                    : "Select department"
+                }
+                disabled={isDepartmentLocked}
                 required
               />
               <FormSelect

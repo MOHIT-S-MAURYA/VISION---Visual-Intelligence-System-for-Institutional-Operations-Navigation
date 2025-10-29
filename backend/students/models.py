@@ -1,4 +1,22 @@
 from django.db import models
+from django.contrib.auth.models import User
+
+
+class Teacher(models.Model):
+    """Teacher profile model linked to Django User"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='teacher_profile')
+    department = models.CharField(max_length=100)
+    full_name = models.CharField(max_length=200)
+    employee_id = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['full_name']
+
+    def __str__(self):
+        return f"{self.full_name} ({self.department})"
+
 
 class Student(models.Model):
     """Student model for storing student information"""

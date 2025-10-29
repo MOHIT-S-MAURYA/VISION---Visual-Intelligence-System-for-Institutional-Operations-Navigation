@@ -5,7 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from .models import AttendanceSession, AttendanceRecord
 from .serializers import AttendanceSessionSerializer, AttendanceRecordSerializer
-from students.models import Student
+from students.models import Student, Teacher
 import requests
 import os
 from django.http import HttpResponse
@@ -16,6 +16,22 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceSessionSerializer
     # Accept JSON for create/update plus multipart for recognize endpoints
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        """Filter sessions by teacher's department"""
+        queryset = AttendanceSession.objects.all()
+        
+        # If user is authenticated and has a teacher profile, filter by department
+        if self.request.user.is_authenticated:
+            try:
+                teacher = Teacher.objects.get(user=self.request.user)
+                queryset = queryset.filter(department=teacher.department)
+            except Teacher.DoesNotExist:
+                # If no teacher profile, allow superusers to see all
+                if not self.request.user.is_superuser:
+                    queryset = queryset.none()
+        
+        return queryset
     
     @action(detail=True, methods=['post'])
     def end_session(self, request, pk=None):

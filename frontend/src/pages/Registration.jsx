@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
@@ -15,6 +15,35 @@ export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [frames, setFrames] = useState([]);
   const [frameCount, setFrameCount] = useState(5);
+  const [teacherDepartment, setTeacherDepartment] = useState(null);
+  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
+
+  // Fetch teacher's department on mount
+  useEffect(() => {
+    const fetchTeacherInfo = async () => {
+      const token = localStorage.getItem("teacher_token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.teacher && data.teacher.department) {
+            setTeacherDepartment(data.teacher.department);
+            setDepartment(data.teacher.department);
+            setIsDepartmentLocked(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching teacher info:", error);
+      }
+    };
+
+    fetchTeacherInfo();
+  }, []);
 
   // Get available years based on selected department
   const availableYears = department ? getYearOptions(department) : [];
@@ -125,7 +154,12 @@ export default function Registration() {
               value: d.value,
               label: d.label,
             }))}
-            hint="Select department or program"
+            hint={
+              isDepartmentLocked
+                ? "🔒 Department is locked to your assigned department"
+                : "Select department or program"
+            }
+            disabled={isDepartmentLocked}
             required
           />
           <Select

@@ -16,6 +16,33 @@ export default function Attendance() {
   const canvasRef = useRef(null);
   const [intervalMs, setIntervalMs] = useState(800);
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
+
+  // Fetch teacher's department on mount
+  useEffect(() => {
+    const fetchTeacherInfo = async () => {
+      const token = localStorage.getItem("teacher_token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.teacher && data.teacher.department) {
+            setDepartment(data.teacher.department);
+            setIsDepartmentLocked(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching teacher info:", error);
+      }
+    };
+
+    fetchTeacherInfo();
+  }, []);
 
   // Get available years based on selected department
   const availableYears = department ? getYearOptions(department) : [];
@@ -295,7 +322,12 @@ export default function Attendance() {
           value={department}
           onChange={handleDepartmentChange}
           options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
-          hint="Select department or program"
+          hint={
+            isDepartmentLocked
+              ? "🔒 Department is locked to your assigned department"
+              : "Select department or program"
+          }
+          disabled={isDepartmentLocked}
           required
         />
         <Select

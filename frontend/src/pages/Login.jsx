@@ -101,8 +101,15 @@ export default function Login() {
           {error && (
             <div className="p-3 bg-red-100 text-red-800 rounded">{error}</div>
           )}
-          <div className="flex justify-end">
-            <button className="bg-blue-600 text-white px-4 py-2 rounded">
+          <div className="flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => navigate("/teacher-register")}
+              className="text-blue-600 hover:text-blue-800 underline text-sm"
+            >
+              New teacher? Register here
+            </button>
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
               Login
             </button>
           </div>
