@@ -6,6 +6,7 @@ import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
 import Students from "./pages/Students";
 import SubjectsManagement from "./pages/SubjectsManagement";
+import TeacherAssignments from "./pages/TeacherAssignments";
 import Login from "./pages/Login";
 import TeacherRegistration from "./pages/TeacherRegistration";
 
@@ -57,6 +58,9 @@ export default function App() {
             <Link to="/subjects" className="hover:underline">
               Subjects
             </Link>
+            <Link to="/assignments" className="hover:underline">
+              Assignments
+            </Link>
             <Link to="/attendance" className="hover:underline">
               Attendance
             </Link>
@@ -95,6 +99,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SubjectsManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/assignments"
+            element={
+              <ProtectedRoute>
+                <TeacherAssignments />
               </ProtectedRoute>
             }
           />

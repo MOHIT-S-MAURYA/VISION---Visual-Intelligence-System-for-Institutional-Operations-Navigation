@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
-import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -8,6 +7,8 @@ export default function Registration() {
   const webcamRef = useRef(null);
   const [rollNumber, setRollNumber] = useState("");
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [department, setDepartment] = useState("");
   const [classYear, setClassYear] = useState("");
   const [captured, setCaptured] = useState(null);
@@ -15,42 +16,91 @@ export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [frames, setFrames] = useState([]);
   const [frameCount, setFrameCount] = useState(5);
-  const [teacherDepartment, setTeacherDepartment] = useState(null);
-  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+  const [selectedDepartmentObj, setSelectedDepartmentObj] = useState(null);
 
-  // Fetch teacher's department on mount
+  // Fetch teacher's assignments and departments on mount
   useEffect(() => {
-    const fetchTeacherInfo = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem("teacher_token");
-      if (!token) return;
 
+      // Fetch departments
       try {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const deptResponse = await fetch(`${API_URL}/api/departments/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.teacher && data.teacher.department) {
-            setTeacherDepartment(data.teacher.department);
-            setDepartment(data.teacher.department);
-            setIsDepartmentLocked(true);
-          }
+        if (deptResponse.ok) {
+          const deptData = await deptResponse.json();
+          setDepartments(deptData);
         }
       } catch (error) {
-        console.error("Error fetching teacher info:", error);
+        console.error("Error fetching departments:", error);
+      }
+
+      // Fetch teacher info if logged in
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.teacher && data.teacher.assignments) {
+              setTeacherAssignments(data.teacher.assignments);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching teacher info:", error);
+        }
       }
     };
 
-    fetchTeacherInfo();
+    fetchData();
   }, []);
 
-  // Get available years based on selected department
-  const availableYears = department ? getYearOptions(department) : [];
+  // Get available departments based on teacher assignments
+  const availableDepartments =
+    teacherAssignments.length > 0
+      ? departments.filter((dept) =>
+          teacherAssignments.some(
+            (assignment) => assignment.department.id === dept.id
+          )
+        )
+      : departments;
 
-  // Reset year when department changes
+  // Get available class years based on selected department and teacher assignments
+  const getAvailableYears = () => {
+    if (!selectedDepartmentObj) return [];
+
+    if (teacherAssignments.length > 0) {
+      // For teachers, show only years they teach in this department
+      const yearsSet = new Set();
+      teacherAssignments
+        .filter((a) => a.department.id === selectedDepartmentObj.id)
+        .forEach((a) => yearsSet.add(a.subject.class_year));
+      return Array.from(yearsSet).sort();
+    }
+
+    // For admins/non-teachers, show all years based on department duration
+    const years = [];
+    const yearNames = ["First", "Second", "Third", "Fourth", "Fifth"];
+    for (let i = 0; i < selectedDepartmentObj.duration_years; i++) {
+      years.push(`${yearNames[i]} Year`);
+    }
+    return years;
+  };
+
+  const availableYears = getAvailableYears();
+
+  // Handle department change
   const handleDepartmentChange = (value) => {
-    setDepartment(value);
+    const deptId = parseInt(value);
+    setDepartment(deptId);
+    const deptObj = departments.find((d) => d.id === deptId);
+    setSelectedDepartmentObj(deptObj);
     setClassYear(""); // Reset year when department changes
   };
 
@@ -86,8 +136,10 @@ export default function Registration() {
       const formData = new FormData();
       formData.append("roll_number", rollNumber);
       formData.append("full_name", fullName);
-      formData.append("department", department);
+      formData.append("department", department); // Now sends department ID (number)
       formData.append("class_year", classYear);
+      if (email) formData.append("email", email);
+      if (phone) formData.append("phone", phone);
       // attach multiple frames
       for (let i = 0; i < frames.length; i++) {
         const res = await fetch(frames[i]);
@@ -134,7 +186,7 @@ export default function Registration() {
             label="Roll Number"
             value={rollNumber}
             onChange={setRollNumber}
-            placeholder="e.g., CS2021001"
+            placeholder="e.g., 2025CS001"
             hint="Unique student identification number"
             required
           />
@@ -142,32 +194,51 @@ export default function Registration() {
             label="Full Name"
             value={fullName}
             onChange={setFullName}
-            placeholder="e.g., John Doe"
+            placeholder="e.g., Rahul Sharma"
             hint="Student's complete name"
             required
+          />
+          <Input
+            label="Email (Optional)"
+            value={email}
+            onChange={setEmail}
+            placeholder="e.g., rahul.sharma@college.edu"
+            hint="Student's email address"
+            type="email"
+          />
+          <Input
+            label="Phone (Optional)"
+            value={phone}
+            onChange={setPhone}
+            placeholder="e.g., +91 98765 43210"
+            hint="Contact number"
+            type="tel"
           />
           <Select
             label="Department"
             value={department}
             onChange={handleDepartmentChange}
-            options={DEPARTMENTS.map((d) => ({
-              value: d.value,
-              label: d.label,
+            options={availableDepartments.map((d) => ({
+              value: d.id,
+              label: `${d.code} - ${d.name}`,
             }))}
             hint={
-              isDepartmentLocked
-                ? "🔒 Department is locked to your assigned department"
+              teacherAssignments.length > 0
+                ? "🎓 Showing only departments you teach"
                 : "Select department or program"
             }
-            disabled={isDepartmentLocked}
             required
           />
           <Select
             label="Class / Year"
             value={classYear}
             onChange={setClassYear}
-            options={availableYears}
-            hint="Select current year"
+            options={availableYears.map((y) => ({ value: y, label: y }))}
+            hint={
+              teacherAssignments.length > 0 && department
+                ? "📚 Showing only years you teach in this department"
+                : "Select current year"
+            }
             disabled={!department}
             required
           />

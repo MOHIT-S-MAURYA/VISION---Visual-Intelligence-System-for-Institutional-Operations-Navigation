@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DEPARTMENTS } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -10,8 +9,8 @@ export default function TeacherRegistration() {
     password: "",
     confirmPassword: "",
     email: "",
+    phone: "",
     full_name: "",
-    department: "",
     employee_id: "",
   });
   const [error, setError] = useState(null);
@@ -28,12 +27,7 @@ export default function TeacherRegistration() {
     setError(null);
 
     // Validation
-    if (
-      !formData.username ||
-      !formData.password ||
-      !formData.full_name ||
-      !formData.department
-    ) {
+    if (!formData.username || !formData.password || !formData.full_name) {
       setError("Please fill in all required fields");
       return;
     }
@@ -55,9 +49,9 @@ export default function TeacherRegistration() {
         body: JSON.stringify({
           username: formData.username,
           password: formData.password,
-          email: formData.email,
+          email: formData.email || null,
+          phone: formData.phone || null,
           full_name: formData.full_name,
-          department: formData.department,
           employee_id: formData.employee_id || null,
         }),
       });
@@ -216,33 +210,39 @@ export default function TeacherRegistration() {
                 Your official employee ID
               </p>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number (Optional)
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="e.g., +91 98765 43210"
+                className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                autoComplete="tel"
+              />
+              <p className="text-xs text-gray-500 mt-1">For contact purposes</p>
+            </div>
           </div>
         </div>
 
-        {/* Department Selection */}
-        <div className="pb-4">
-          <h3 className="text-lg font-semibold mb-3">Department Assignment</h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Department <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="department"
-              value={formData.department}
-              onChange={handleChange}
-              className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">-- Select Department --</option>
-              {DEPARTMENTS.map((dept) => (
-                <option key={dept.value} value={dept.value}>
-                  {dept.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              ⚠️ Important: You will only be able to manage students, subjects,
-              and attendance for this department
-            </p>
+        {/* Information Note */}
+        <div className="pb-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="flex items-start">
+            <span className="text-blue-600 text-xl mr-2">ℹ️</span>
+            <div>
+              <h3 className="font-semibold text-blue-900 mb-1">
+                About Subject Assignments
+              </h3>
+              <p className="text-sm text-blue-800">
+                After registration, an administrator will assign you to specific
+                subjects and classes. You will then be able to manage students
+                and attendance for those assigned subjects only.
+              </p>
+            </div>
           </div>
         </div>
 

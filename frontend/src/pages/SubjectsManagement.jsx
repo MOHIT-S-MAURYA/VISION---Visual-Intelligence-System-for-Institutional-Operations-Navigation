@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export default function SubjectsManagement() {
   const [subjects, setSubjects] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
@@ -19,48 +19,97 @@ export default function SubjectsManagement() {
     class_year: "",
     subject_name: "",
     subject_code: "",
+    credits: 3,
   });
-  const [teacherDepartment, setTeacherDepartment] = useState(null);
-  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+  const [selectedDepartmentObj, setSelectedDepartmentObj] = useState(null);
+  const [selectedFilterDeptObj, setSelectedFilterDeptObj] = useState(null);
 
-  // Fetch teacher's department on mount
+  // Fetch departments and teacher info on mount
   useEffect(() => {
-    const fetchTeacherInfo = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem("teacher_token");
-      if (!token) return;
 
+      // Fetch departments
       try {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const deptResponse = await fetch(`${API_URL}/api/departments/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.teacher && data.teacher.department) {
-            setTeacherDepartment(data.teacher.department);
-            setFilters((prev) => ({
-              ...prev,
-              department: data.teacher.department,
-            }));
-            setIsDepartmentLocked(true);
-          }
+        if (deptResponse.ok) {
+          const deptData = await deptResponse.json();
+          setDepartments(deptData);
         }
       } catch (error) {
-        console.error("Error fetching teacher info:", error);
+        console.error("Error fetching departments:", error);
+      }
+
+      // Fetch teacher info if logged in
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.teacher && data.teacher.assignments) {
+              setTeacherAssignments(data.teacher.assignments);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching teacher info:", error);
+        }
       }
     };
 
-    fetchTeacherInfo();
+    fetchData();
   }, []);
 
-  // Get available years based on selected department
-  const availableFilterYears = filters.department
-    ? getYearOptions(filters.department)
-    : [];
+  // Get available departments based on teacher assignments
+  const availableDepartments =
+    teacherAssignments.length > 0
+      ? departments.filter((dept) =>
+          teacherAssignments.some(
+            (assignment) => assignment.department.id === dept.id
+          )
+        )
+      : departments;
 
-  const availableFormYears = formData.department
-    ? getYearOptions(formData.department)
-    : [];
+  // Get available class years for filter based on department and teacher assignments
+  const getAvailableFilterYears = () => {
+    if (!selectedFilterDeptObj) return [];
+
+    if (teacherAssignments.length > 0) {
+      const yearsSet = new Set();
+      teacherAssignments
+        .filter((a) => a.department.id === selectedFilterDeptObj.id)
+        .forEach((a) => yearsSet.add(a.subject.class_year));
+      return Array.from(yearsSet).sort();
+    }
+
+    const years = [];
+    const yearNames = ["First", "Second", "Third", "Fourth", "Fifth"];
+    for (let i = 0; i < selectedFilterDeptObj.duration_years; i++) {
+      years.push(`${yearNames[i]} Year`);
+    }
+    return years;
+  };
+
+  // Get available class years for form based on department
+  const getAvailableFormYears = () => {
+    if (!selectedDepartmentObj) return [];
+
+    const years = [];
+    const yearNames = ["First", "Second", "Third", "Fourth", "Fifth"];
+    for (let i = 0; i < selectedDepartmentObj.duration_years; i++) {
+      years.push(`${yearNames[i]} Year`);
+    }
+    return years;
+  };
+
+  const availableFilterYears = getAvailableFilterYears();
+  const availableFormYears = getAvailableFormYears();
 
   async function loadSubjects() {
     setLoading(true);
@@ -68,7 +117,8 @@ export default function SubjectsManagement() {
     try {
       const token = localStorage.getItem("teacher_token");
       const params = new URLSearchParams();
-      if (filters.department) params.append("department", filters.department);
+      if (filters.department)
+        params.append("department_id", filters.department); // department_id for filtering
       if (filters.classYear) params.append("class_year", filters.classYear);
 
       const res = await fetch(`${API_URL}/api/subjects/?${params}`, {
@@ -102,23 +152,32 @@ export default function SubjectsManagement() {
 
   function openCreateModal() {
     setEditingSubject(null);
+    const defaultDept = availableDepartments[0]?.id || "";
     setFormData({
-      department: teacherDepartment || "",
+      department: defaultDept,
       class_year: "",
       subject_name: "",
       subject_code: "",
+      credits: 3,
     });
+    if (defaultDept) {
+      setSelectedDepartmentObj(departments.find((d) => d.id === defaultDept));
+    }
     setShowModal(true);
   }
 
   function openEditModal(subject) {
     setEditingSubject(subject);
     setFormData({
-      department: subject.department,
+      department: subject.department, // department ID
       class_year: subject.class_year,
       subject_name: subject.subject_name,
       subject_code: subject.subject_code || "",
+      credits: subject.credits || 3,
     });
+    setSelectedDepartmentObj(
+      departments.find((d) => d.id === subject.department)
+    );
     setShowModal(true);
   }
 
@@ -130,11 +189,23 @@ export default function SubjectsManagement() {
       class_year: "",
       subject_name: "",
       subject_code: "",
+      credits: 3,
     });
+    setSelectedDepartmentObj(null);
   }
 
   const handleFormDepartmentChange = (value) => {
-    setFormData((f) => ({ ...f, department: value, class_year: "" }));
+    const deptId = parseInt(value);
+    setFormData((f) => ({ ...f, department: deptId, class_year: "" }));
+    setSelectedDepartmentObj(departments.find((d) => d.id === deptId));
+  };
+
+  const handleFilterDepartmentChange = (value) => {
+    const deptId = value ? parseInt(value) : "";
+    setFilters((f) => ({ ...f, department: deptId, classYear: "" }));
+    setSelectedFilterDeptObj(
+      deptId ? departments.find((d) => d.id === deptId) : null
+    );
   };
 
   async function handleSubmit(e) {
@@ -230,22 +301,22 @@ export default function SubjectsManagement() {
         <Select
           label="Department"
           value={filters.department}
-          onChange={(v) => {
-            setFilters((f) => ({ ...f, department: v, classYear: "" }));
-          }}
-          options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
+          onChange={handleFilterDepartmentChange}
+          options={availableDepartments.map((d) => ({
+            value: d.id,
+            label: `${d.code} - ${d.name}`,
+          }))}
           hint={
-            isDepartmentLocked
-              ? "🔒 Showing your department only"
+            teacherAssignments.length > 0
+              ? "🎓 Showing only your assigned departments"
               : "Filter by department"
           }
-          disabled={isDepartmentLocked}
         />
         <Select
           label="Class / Year"
           value={filters.classYear}
           onChange={(v) => setFilters((f) => ({ ...f, classYear: v }))}
-          options={availableFilterYears}
+          options={availableFilterYears.map((y) => ({ value: y, label: y }))}
           hint="Filter by year"
           disabled={!filters.department}
         />
@@ -259,9 +330,10 @@ export default function SubjectsManagement() {
         <div className="flex items-end">
           <button
             className="border px-4 py-2 rounded w-full hover:bg-gray-50"
-            onClick={() =>
-              setFilters({ department: "", classYear: "", search: "" })
-            }
+            onClick={() => {
+              setFilters({ department: "", classYear: "", search: "" });
+              setSelectedFilterDeptObj(null);
+            }}
             title="Clear all filters"
           >
             Clear Filters
@@ -288,13 +360,14 @@ export default function SubjectsManagement() {
                   <Th>Year</Th>
                   <Th>Subject Name</Th>
                   <Th>Subject Code</Th>
+                  <Th>Credits</Th>
                   <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSubjects.map((s) => (
                   <tr key={s.id} className="border-t hover:bg-gray-50">
-                    <Td>{s.department}</Td>
+                    <Td>{s.department_code || s.department}</Td>
                     <Td>{s.class_year}</Td>
                     <Td>{s.subject_name}</Td>
                     <Td>
@@ -302,6 +375,7 @@ export default function SubjectsManagement() {
                         <span className="text-gray-400">-</span>
                       )}
                     </Td>
+                    <Td>{s.credits || 3}</Td>
                     <Td>
                       <div className="flex gap-2">
                         <button
@@ -324,7 +398,7 @@ export default function SubjectsManagement() {
                 ))}
                 {filteredSubjects.length === 0 && (
                   <tr>
-                    <Td colSpan={5}>
+                    <Td colSpan={6}>
                       <div className="text-center text-gray-500 py-6">
                         No subjects found. Add some subjects to get started.
                       </div>
@@ -358,23 +432,25 @@ export default function SubjectsManagement() {
                 label="Department"
                 value={formData.department}
                 onChange={handleFormDepartmentChange}
-                options={DEPARTMENTS.map((d) => ({
-                  value: d.value,
-                  label: d.label,
+                options={availableDepartments.map((d) => ({
+                  value: d.id,
+                  label: `${d.code} - ${d.name}`,
                 }))}
                 hint={
-                  isDepartmentLocked
-                    ? "🔒 Department is locked to your assigned department"
+                  teacherAssignments.length > 0
+                    ? "🎓 Showing only your assigned departments"
                     : "Select department"
                 }
-                disabled={isDepartmentLocked}
                 required
               />
               <FormSelect
                 label="Class / Year"
                 value={formData.class_year}
                 onChange={(v) => setFormData((f) => ({ ...f, class_year: v }))}
-                options={availableFormYears}
+                options={availableFormYears.map((y) => ({
+                  value: y,
+                  label: y,
+                }))}
                 hint="Select year"
                 disabled={!formData.department}
                 required
@@ -385,7 +461,7 @@ export default function SubjectsManagement() {
                 onChange={(v) =>
                   setFormData((f) => ({ ...f, subject_name: v }))
                 }
-                placeholder="e.g., Data Structures"
+                placeholder="e.g., Data Structures and Algorithms"
                 hint="Full name of the subject"
                 required
               />
@@ -395,8 +471,21 @@ export default function SubjectsManagement() {
                 onChange={(v) =>
                   setFormData((f) => ({ ...f, subject_code: v }))
                 }
-                placeholder="e.g., CS201 (optional)"
-                hint="Subject code (optional)"
+                placeholder="e.g., CS301 (optional)"
+                hint="Official subject code (optional)"
+              />
+              <FormInput
+                label="Credits"
+                type="number"
+                value={formData.credits}
+                onChange={(v) =>
+                  setFormData((f) => ({ ...f, credits: parseInt(v) || 3 }))
+                }
+                placeholder="e.g., 4"
+                hint="Number of credits for this subject"
+                min="1"
+                max="10"
+                required
               />
 
               <div className="flex justify-end gap-3 pt-4 border-t">
@@ -469,7 +558,17 @@ function Select({ label, value, onChange, options, hint, disabled }) {
   );
 }
 
-function FormInput({ label, value, onChange, placeholder, hint, required }) {
+function FormInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  required,
+  type = "text",
+  min,
+  max,
+}) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -477,11 +576,13 @@ function FormInput({ label, value, onChange, placeholder, hint, required }) {
         {required && <span className="text-red-500"> *</span>}
       </label>
       <input
-        type="text"
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
+        min={min}
+        max={max}
         className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
