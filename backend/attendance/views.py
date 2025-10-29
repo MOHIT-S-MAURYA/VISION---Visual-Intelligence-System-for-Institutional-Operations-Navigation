@@ -2,10 +2,12 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
+from django.db.models import Q
 from .models import AttendanceSession, AttendanceRecord
 from .serializers import AttendanceSessionSerializer, AttendanceRecordSerializer
-from students.models import Student, Teacher
+from students.models import Student, Teacher, TeacherSubjectAssignment
 import requests
 import os
 from django.http import HttpResponse
@@ -18,20 +20,65 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_queryset(self):
-        """Filter sessions by teacher's department"""
+        """Filter sessions by teacher's assigned subjects"""
         queryset = AttendanceSession.objects.all()
         
-        # If user is authenticated and has a teacher profile, filter by department
+        # If user is authenticated and has a teacher profile, filter by assignments
         if self.request.user.is_authenticated:
             try:
                 teacher = Teacher.objects.get(user=self.request.user)
-                queryset = queryset.filter(department=teacher.department)
+                if not self.request.user.is_superuser:
+                    # Get all department-class_year-subject combinations teacher is assigned to
+                    assignments = TeacherSubjectAssignment.objects.filter(
+                        teacher=teacher,
+                        is_active=True
+                    ).select_related('subject', 'subject__department')
+                    
+                    if not assignments.exists():
+                        return queryset.none()
+                    
+                    # Build Q objects for filtering sessions
+                    q_objects = Q()
+                    for assignment in assignments:
+                        q_objects |= Q(
+                            department=assignment.subject.department.code,
+                            class_year=assignment.subject.class_year,
+                            subject=assignment.subject.subject_name
+                        )
+                    
+                    queryset = queryset.filter(q_objects)
             except Teacher.DoesNotExist:
-                # If no teacher profile, allow superusers to see all
                 if not self.request.user.is_superuser:
                     queryset = queryset.none()
         
         return queryset
+    
+    def perform_create(self, serializer):
+        """Validate teacher can create session for this subject"""
+        if not self.request.user.is_superuser:
+            try:
+                teacher = Teacher.objects.get(user=self.request.user)
+                
+                # Get the data being created
+                department = serializer.validated_data.get('department')
+                class_year = serializer.validated_data.get('class_year')
+                subject = serializer.validated_data.get('subject')
+                
+                # Check if teacher has assignment for this subject
+                has_assignment = TeacherSubjectAssignment.objects.filter(
+                    teacher=teacher,
+                    subject__department__code=department,
+                    subject__class_year=class_year,
+                    subject__subject_name=subject,
+                    is_active=True
+                ).exists()
+                
+                if not has_assignment:
+                    raise PermissionDenied("You are not assigned to teach this subject")
+            except Teacher.DoesNotExist:
+                raise PermissionDenied("Teacher profile not found")
+        
+        serializer.save()
     
     @action(detail=True, methods=['post'])
     def end_session(self, request, pk=None):

@@ -4,12 +4,31 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.files.base import ContentFile
+from django.db.models import Q
 import requests
 import base64
 import io
 import os
-from .models import Student, Subject, Teacher
-from .serializers import StudentSerializer, SubjectSerializer, TeacherSerializer
+from .models import Student, Subject, Teacher, TeacherSubjectAssignment, Department
+from .serializers import (StudentSerializer, SubjectSerializer, TeacherSerializer, 
+                          TeacherSubjectAssignmentSerializer, DepartmentSerializer)
+
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing departments"""
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = Department.objects.filter(is_active=True)
+        
+        # Filter by degree type if specified
+        degree_type = self.request.query_params.get('degree_type', None)
+        if degree_type:
+            queryset = queryset.filter(degree_type=degree_type)
+        
+        return queryset
 
 
 class TeacherViewSet(viewsets.ModelViewSet):
@@ -25,16 +44,50 @@ class TeacherViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def me(self, request):
-        """Get current teacher's profile"""
+        """Get current teacher's profile with subject assignments"""
         try:
             teacher = Teacher.objects.get(user=request.user)
             serializer = self.get_serializer(teacher)
-            return Response(serializer.data)
+            
+            # Get teacher's subject assignments
+            assignments = TeacherSubjectAssignment.objects.filter(
+                teacher=teacher, 
+                is_active=True
+            ).select_related('subject')
+            
+            assignment_data = TeacherSubjectAssignmentSerializer(assignments, many=True).data
+            
+            response_data = serializer.data
+            response_data['assignments'] = assignment_data
+            
+            return Response(response_data)
         except Teacher.DoesNotExist:
             return Response(
                 {'error': 'Teacher profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class TeacherSubjectAssignmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing teacher-subject assignments"""
+    queryset = TeacherSubjectAssignment.objects.all()
+    serializer_class = TeacherSubjectAssignmentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter assignments - teachers see only their own"""
+        queryset = TeacherSubjectAssignment.objects.all()
+        
+        if self.request.user.is_authenticated:
+            try:
+                teacher = Teacher.objects.get(user=self.request.user)
+                if not self.request.user.is_superuser:
+                    queryset = queryset.filter(teacher=teacher)
+            except Teacher.DoesNotExist:
+                if not self.request.user.is_superuser:
+                    queryset = queryset.none()
+        
+        return queryset.select_related('teacher', 'subject')
 
 
 class StudentViewSet(viewsets.ModelViewSet):
@@ -43,16 +96,30 @@ class StudentViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser]
     
     def get_queryset(self):
-        """Filter students by teacher's department"""
+        """Filter students by teacher's assigned classes"""
         queryset = Student.objects.all()
         
-        # If user is authenticated and has a teacher profile, filter by department
+        # If user is authenticated and has a teacher profile, filter by assignments
         if self.request.user.is_authenticated:
             try:
                 teacher = Teacher.objects.get(user=self.request.user)
-                queryset = queryset.filter(department=teacher.department)
+                if not self.request.user.is_superuser:
+                    # Get all department-year combinations this teacher teaches
+                    assignments = TeacherSubjectAssignment.objects.filter(
+                        teacher=teacher,
+                        is_active=True
+                    ).values_list('department', 'class_year').distinct()
+                    
+                    if not assignments:
+                        return queryset.none()
+                    
+                    # Build Q objects for OR filtering
+                    q_objects = Q()
+                    for dept, year in assignments:
+                        q_objects |= Q(department=dept, class_year=year)
+                    
+                    queryset = queryset.filter(q_objects)
             except Teacher.DoesNotExist:
-                # If no teacher profile, allow superusers to see all
                 if not self.request.user.is_superuser:
                     queryset = queryset.none()
         
@@ -237,25 +304,31 @@ class SubjectViewSet(viewsets.ModelViewSet):
     serializer_class = SubjectSerializer
     
     def get_queryset(self):
-        """Filter subjects by query params and teacher's department"""
-        queryset = Subject.objects.all()
+        """Filter subjects by teacher's assignments"""
+        queryset = Subject.objects.select_related('department').filter(is_active=True)
         
-        # If user is authenticated and has a teacher profile, filter by their department
+        # If user is authenticated and has a teacher profile, filter by their assignments
         if self.request.user.is_authenticated:
             try:
                 teacher = Teacher.objects.get(user=self.request.user)
-                queryset = queryset.filter(department=teacher.department)
+                if not self.request.user.is_superuser:
+                    # Get subjects teacher is assigned to
+                    assigned_subject_ids = TeacherSubjectAssignment.objects.filter(
+                        teacher=teacher,
+                        is_active=True
+                    ).values_list('subject_id', flat=True)
+                    
+                    queryset = queryset.filter(id__in=assigned_subject_ids)
             except Teacher.DoesNotExist:
-                # If no teacher profile, allow superusers to see all
                 if not self.request.user.is_superuser:
                     queryset = queryset.none()
         
         # Additional filtering by query parameters
-        department = self.request.query_params.get('department', None)
+        department_id = self.request.query_params.get('department', None)
         class_year = self.request.query_params.get('class_year', None)
         
-        if department:
-            queryset = queryset.filter(department=department)
+        if department_id:
+            queryset = queryset.filter(department_id=department_id)
         if class_year:
             queryset = queryset.filter(class_year=class_year)
             
