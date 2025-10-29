@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
+import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -14,6 +15,57 @@ export default function Attendance() {
   const intervalRef = useRef(null);
   const canvasRef = useRef(null);
   const [intervalMs, setIntervalMs] = useState(800);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+
+  // Get available years based on selected department
+  const availableYears = department ? getYearOptions(department) : [];
+
+  // Fetch subjects from API when department or year changes
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      if (!department || !classYear) {
+        setAvailableSubjects([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/subjects/?department=${encodeURIComponent(
+            department
+          )}&class_year=${encodeURIComponent(classYear)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const subjectOptions = data.map((s) => ({
+            value: s.subject_name,
+            label: s.subject_name,
+          }));
+          setAvailableSubjects(subjectOptions);
+        } else {
+          console.error("Failed to fetch subjects");
+          setAvailableSubjects([]);
+        }
+      } catch (error) {
+        console.error("Error fetching subjects:", error);
+        setAvailableSubjects([]);
+      }
+    };
+
+    fetchSubjects();
+  }, [department, classYear]);
+
+  // Reset year and subject when department changes
+  const handleDepartmentChange = (value) => {
+    setDepartment(value);
+    setClassYear("");
+    setSubject("");
+  };
+
+  // Reset subject when year changes
+  const handleYearChange = (value) => {
+    setClassYear(value);
+    setSubject("");
+  };
 
   async function createSession(e) {
     e.preventDefault();
@@ -238,28 +290,30 @@ export default function Attendance() {
         onSubmit={createSession}
         className="bg-white shadow rounded p-6 grid grid-cols-1 md:grid-cols-4 gap-4"
       >
-        <Input
+        <Select
           label="Department"
           value={department}
-          onChange={setDepartment}
-          placeholder="e.g., CSE, ECE"
-          hint="Enter department code or name"
+          onChange={handleDepartmentChange}
+          options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
+          hint="Select department or program"
           required
         />
-        <Input
+        <Select
           label="Class / Year"
           value={classYear}
-          onChange={setClassYear}
-          placeholder="e.g., First Year"
-          hint="Student year or class"
+          onChange={handleYearChange}
+          options={availableYears}
+          hint="Select student year"
+          disabled={!department}
           required
         />
-        <Input
+        <Select
           label="Subject"
           value={subject}
           onChange={setSubject}
-          placeholder="e.g., Data Structures"
-          hint="Subject or course name"
+          options={availableSubjects}
+          hint="Select subject for this session"
+          disabled={!department || !classYear}
           required
         />
         <div className="flex items-end">
@@ -427,6 +481,37 @@ function Input({ label, value, onChange, required, placeholder, hint }) {
         className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options, hint, required, disabled }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        disabled={disabled}
+        className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      >
+        <option value="">-- Select {label} --</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {disabled && (
+        <p className="text-xs text-orange-600 mt-1">
+          Please select a department first
+        </p>
+      )}
     </div>
   );
 }

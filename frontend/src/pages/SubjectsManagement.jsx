@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
-export default function Students() {
-  const [students, setStudents] = useState([]);
+export default function SubjectsManagement() {
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
@@ -13,48 +13,39 @@ export default function Students() {
     search: "",
   });
   const [showModal, setShowModal] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
+  const [editingSubject, setEditingSubject] = useState(null);
   const [formData, setFormData] = useState({
-    roll_number: "",
-    full_name: "",
     department: "",
     class_year: "",
+    subject_name: "",
+    subject_code: "",
   });
 
-  async function loadStudents() {
+  // Get available years based on selected department
+  const availableFilterYears = filters.department
+    ? getYearOptions(filters.department)
+    : [];
+
+  const availableFormYears = formData.department
+    ? getYearOptions(formData.department)
+    : [];
+
+  async function loadSubjects() {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("teacher_token");
-      const refresh = localStorage.getItem("teacher_refresh");
-      let res = await fetch(`${API_URL}/api/students/`, {
+      const params = new URLSearchParams();
+      if (filters.department) params.append("department", filters.department);
+      if (filters.classYear) params.append("class_year", filters.classYear);
+
+      const res = await fetch(`${API_URL}/api/subjects/?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // On 401, try to refresh token once
-      if (res.status === 401 && refresh) {
-        const r = await fetch(`${API_URL}/api/auth/token/refresh/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh }),
-        });
-        if (r.ok) {
-          const t = await r.json();
-          if (t.access) {
-            localStorage.setItem("teacher_token", t.access);
-            res = await fetch(`${API_URL}/api/students/`, {
-              headers: { Authorization: `Bearer ${t.access}` },
-            });
-          }
-        } else {
-          localStorage.removeItem("teacher_token");
-          localStorage.removeItem("teacher_refresh");
-        }
-      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load students");
-      // Sort by roll number
-      data.sort((a, b) => a.roll_number.localeCompare(b.roll_number));
-      setStudents(data);
+      if (!res.ok) throw new Error(data.error || "Failed to load subjects");
+      setSubjects(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -63,60 +54,65 @@ export default function Students() {
   }
 
   useEffect(() => {
-    loadStudents();
-  }, []);
+    loadSubjects();
+  }, [filters.department, filters.classYear]);
 
-  // Get available years based on selected department in form
-  const availableFormYears = formData.department
-    ? getYearOptions(formData.department)
-    : [];
-
-  // Handle department change in form - reset year
-  const handleFormDepartmentChange = (value) => {
-    setFormData((f) => ({ ...f, department: value, class_year: "" }));
-  };
+  const filteredSubjects = subjects.filter((s) => {
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      return (
+        s.subject_name.toLowerCase().includes(term) ||
+        (s.subject_code && s.subject_code.toLowerCase().includes(term))
+      );
+    }
+    return true;
+  });
 
   function openCreateModal() {
-    setEditingStudent(null);
+    setEditingSubject(null);
     setFormData({
-      roll_number: "",
-      full_name: "",
       department: "",
       class_year: "",
+      subject_name: "",
+      subject_code: "",
     });
     setShowModal(true);
   }
 
-  function openEditModal(student) {
-    setEditingStudent(student);
+  function openEditModal(subject) {
+    setEditingSubject(subject);
     setFormData({
-      roll_number: student.roll_number,
-      full_name: student.full_name,
-      department: student.department,
-      class_year: student.class_year,
+      department: subject.department,
+      class_year: subject.class_year,
+      subject_name: subject.subject_name,
+      subject_code: subject.subject_code || "",
     });
     setShowModal(true);
   }
 
   function closeModal() {
     setShowModal(false);
-    setEditingStudent(null);
+    setEditingSubject(null);
     setFormData({
-      roll_number: "",
-      full_name: "",
       department: "",
       class_year: "",
+      subject_name: "",
+      subject_code: "",
     });
   }
+
+  const handleFormDepartmentChange = (value) => {
+    setFormData((f) => ({ ...f, department: value, class_year: "" }));
+  };
 
   async function handleSubmit(e) {
     e.preventDefault();
     try {
       const token = localStorage.getItem("teacher_token");
-      const url = editingStudent
-        ? `${API_URL}/api/students/${editingStudent.id}/`
-        : `${API_URL}/api/students/`;
-      const method = editingStudent ? "PUT" : "POST";
+      const url = editingSubject
+        ? `${API_URL}/api/subjects/${editingSubject.id}/`
+        : `${API_URL}/api/subjects/`;
+      const method = editingSubject ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
@@ -140,77 +136,57 @@ export default function Students() {
       }
 
       alert(
-        editingStudent
-          ? "Student updated successfully!"
-          : "Student created successfully!"
+        editingSubject
+          ? "Subject updated successfully!"
+          : "Subject created successfully!"
       );
       closeModal();
-      loadStudents();
+      loadSubjects();
     } catch (err) {
       alert(`Error: ${err.message}`);
     }
   }
 
-  async function deleteStudent(student) {
+  async function deleteSubject(subject) {
     if (
       !window.confirm(
-        `Delete student ${student.full_name} (${student.roll_number})? This action cannot be undone.`
+        `Delete subject "${subject.subject_name}"? This action cannot be undone.`
       )
     )
       return;
 
     try {
       const token = localStorage.getItem("teacher_token");
-      const res = await fetch(`${API_URL}/api/students/${student.id}/`, {
+      const res = await fetch(`${API_URL}/api/subjects/${subject.id}/`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to delete student");
+        throw new Error(data.error || "Failed to delete subject");
       }
 
-      alert("Student deleted successfully!");
-      loadStudents();
+      alert("Subject deleted successfully!");
+      loadSubjects();
     } catch (err) {
       alert(`Error: ${err.message}`);
     }
   }
 
-  const filtered = useMemo(() => {
-    return students.filter((s) => {
-      if (filters.department && s.department !== filters.department)
-        return false;
-      if (filters.classYear && s.class_year !== filters.classYear) return false;
-      if (filters.search) {
-        const term = filters.search.toLowerCase();
-        return (
-          s.roll_number.toLowerCase().includes(term) ||
-          s.full_name.toLowerCase().includes(term)
-        );
-      }
-      return true;
-    });
-  }, [students, filters]);
-
-  // Get unique departments and class years for filter dropdowns
-  const departments = [...new Set(students.map((s) => s.department))].sort();
-  const classYears = [...new Set(students.map((s) => s.class_year))].sort();
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">All Students</h2>
+        <h2 className="text-xl font-bold">Subjects Management</h2>
         <div className="space-x-3">
           <button
             onClick={openCreateModal}
             className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
           >
-            + Add Student
+            + Add Subject
           </button>
           <button
-            onClick={loadStudents}
+            onClick={loadSubjects}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Refresh
@@ -219,26 +195,29 @@ export default function Students() {
       </div>
 
       <div className="bg-white shadow rounded p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Input
-          label="Search"
-          value={filters.search}
-          onChange={(v) => setFilters((f) => ({ ...f, search: v }))}
-          placeholder="Search by name or roll number..."
-          hint="Search student records"
-        />
         <Select
           label="Department"
           value={filters.department}
-          onChange={(v) => setFilters((f) => ({ ...f, department: v }))}
-          options={departments}
+          onChange={(v) => {
+            setFilters((f) => ({ ...f, department: v, classYear: "" }));
+          }}
+          options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
           hint="Filter by department"
         />
         <Select
           label="Class / Year"
           value={filters.classYear}
           onChange={(v) => setFilters((f) => ({ ...f, classYear: v }))}
-          options={classYears}
+          options={availableFilterYears}
           hint="Filter by year"
+          disabled={!filters.department}
+        />
+        <Input
+          label="Search"
+          value={filters.search}
+          onChange={(v) => setFilters((f) => ({ ...f, search: v }))}
+          placeholder="Search by subject name..."
+          hint="Search subjects"
         />
         <div className="flex items-end">
           <button
@@ -261,54 +240,29 @@ export default function Students() {
       {!loading && !error && (
         <>
           <div className="bg-gray-50 p-3 rounded text-sm text-gray-700">
-            Showing {filtered.length} of {students.length} students
+            Showing {filteredSubjects.length} subjects
           </div>
 
           <div className="bg-white shadow rounded overflow-auto">
             <table className="min-w-full">
               <thead>
                 <tr className="text-left bg-gray-50">
-                  <Th>Roll Number</Th>
-                  <Th>Full Name</Th>
                   <Th>Department</Th>
-                  <Th>Class/Year</Th>
-                  <Th>Face Image</Th>
-                  <Th>Registered</Th>
+                  <Th>Year</Th>
+                  <Th>Subject Name</Th>
+                  <Th>Subject Code</Th>
                   <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s) => (
+                {filteredSubjects.map((s) => (
                   <tr key={s.id} className="border-t hover:bg-gray-50">
-                    <Td>
-                      <span className="font-mono">{s.roll_number}</span>
-                    </Td>
-                    <Td>{s.full_name}</Td>
                     <Td>{s.department}</Td>
                     <Td>{s.class_year}</Td>
+                    <Td>{s.subject_name}</Td>
                     <Td>
-                      {s.face_image ? (
-                        <a
-                          href={`${API_URL}${s.face_image}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-600 hover:underline text-sm"
-                        >
-                          View
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-sm">-</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {s.face_embedding_id ? (
-                        <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
-                          ✓ Yes
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded">
-                          ✗ No
-                        </span>
+                      {s.subject_code || (
+                        <span className="text-gray-400">-</span>
                       )}
                     </Td>
                     <Td>
@@ -316,14 +270,14 @@ export default function Students() {
                         <button
                           onClick={() => openEditModal(s)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          title="Edit student details"
+                          title="Edit subject"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => deleteStudent(s)}
+                          onClick={() => deleteSubject(s)}
                           className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          title="Delete student"
+                          title="Delete subject"
                         >
                           Delete
                         </button>
@@ -331,11 +285,11 @@ export default function Students() {
                     </Td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {filteredSubjects.length === 0 && (
                   <tr>
-                    <Td colSpan={7}>
+                    <Td colSpan={5}>
                       <div className="text-center text-gray-500 py-6">
-                        No students found.
+                        No subjects found. Add some subjects to get started.
                       </div>
                     </Td>
                   </tr>
@@ -352,7 +306,7 @@ export default function Students() {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-bold">
-                {editingStudent ? "Edit Student" : "Add New Student"}
+                {editingSubject ? "Edit Subject" : "Add New Subject"}
               </h3>
               <button
                 onClick={closeModal}
@@ -363,22 +317,6 @@ export default function Students() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
-              <FormInput
-                label="Roll Number"
-                value={formData.roll_number}
-                onChange={(v) => setFormData((f) => ({ ...f, roll_number: v }))}
-                placeholder="e.g., CS2021001"
-                hint="Unique student identification number"
-                required
-              />
-              <FormInput
-                label="Full Name"
-                value={formData.full_name}
-                onChange={(v) => setFormData((f) => ({ ...f, full_name: v }))}
-                placeholder="e.g., John Doe"
-                hint="Student's complete name"
-                required
-              />
               <FormSelect
                 label="Department"
                 value={formData.department}
@@ -387,7 +325,7 @@ export default function Students() {
                   value: d.value,
                   label: d.label,
                 }))}
-                hint="Select department or program"
+                hint="Select department"
                 required
               />
               <FormSelect
@@ -395,9 +333,28 @@ export default function Students() {
                 value={formData.class_year}
                 onChange={(v) => setFormData((f) => ({ ...f, class_year: v }))}
                 options={availableFormYears}
-                hint="Select current year"
+                hint="Select year"
                 disabled={!formData.department}
                 required
+              />
+              <FormInput
+                label="Subject Name"
+                value={formData.subject_name}
+                onChange={(v) =>
+                  setFormData((f) => ({ ...f, subject_name: v }))
+                }
+                placeholder="e.g., Data Structures"
+                hint="Full name of the subject"
+                required
+              />
+              <FormInput
+                label="Subject Code"
+                value={formData.subject_code}
+                onChange={(v) =>
+                  setFormData((f) => ({ ...f, subject_code: v }))
+                }
+                placeholder="e.g., CS201 (optional)"
+                hint="Subject code (optional)"
               />
 
               <div className="flex justify-end gap-3 pt-4 border-t">
@@ -412,7 +369,7 @@ export default function Students() {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  {editingStudent ? "Update" : "Create"}
+                  {editingSubject ? "Update" : "Create"}
                 </button>
               </div>
             </form>
@@ -441,7 +398,7 @@ function Input({ label, value, onChange, placeholder, hint }) {
   );
 }
 
-function Select({ label, value, onChange, options, hint }) {
+function Select({ label, value, onChange, options, hint, disabled }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -450,29 +407,23 @@ function Select({ label, value, onChange, options, hint }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        disabled={disabled}
+        className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
       >
         <option value="">All</option>
         {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
           </option>
         ))}
       </select>
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {disabled && (
+        <p className="text-xs text-orange-600 mt-1">
+          Please select a department first
+        </p>
+      )}
     </div>
-  );
-}
-
-function Th({ children }) {
-  return <th className="px-3 py-2 text-sm font-semibold">{children}</th>;
-}
-
-function Td({ children, colSpan }) {
-  return (
-    <td className="px-3 py-2 text-sm text-gray-800" colSpan={colSpan}>
-      {children}
-    </td>
   );
 }
 
@@ -532,5 +483,17 @@ function FormSelect({
         </p>
       )}
     </div>
+  );
+}
+
+function Th({ children }) {
+  return <th className="px-3 py-2 text-sm font-semibold">{children}</th>;
+}
+
+function Td({ children, colSpan }) {
+  return (
+    <td className="px-3 py-2 text-sm text-gray-800" colSpan={colSpan}>
+      {children}
+    </td>
   );
 }

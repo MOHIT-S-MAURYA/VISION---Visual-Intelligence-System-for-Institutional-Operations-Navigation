@@ -7,8 +7,8 @@ import requests
 import base64
 import io
 import os
-from .models import Student
-from .serializers import StudentSerializer
+from .models import Student, Subject
+from .serializers import StudentSerializer, SubjectSerializer
 
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
@@ -186,3 +186,59 @@ class StudentViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+
+class SubjectViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing subjects"""
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    
+    def get_queryset(self):
+        """Filter subjects by department and year if provided"""
+        queryset = Subject.objects.all()
+        department = self.request.query_params.get('department', None)
+        class_year = self.request.query_params.get('class_year', None)
+        
+        if department:
+            queryset = queryset.filter(department=department)
+        if class_year:
+            queryset = queryset.filter(class_year=class_year)
+            
+        return queryset
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Bulk create subjects from a list"""
+        subjects_data = request.data.get('subjects', [])
+        if not subjects_data:
+            return Response(
+                {'error': 'No subjects provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        created = []
+        errors = []
+        
+        for subject_data in subjects_data:
+            serializer = self.get_serializer(data=subject_data)
+            if serializer.is_valid():
+                try:
+                    serializer.save()
+                    created.append(serializer.data)
+                except Exception as e:
+                    errors.append({
+                        'data': subject_data,
+                        'error': str(e)
+                    })
+            else:
+                errors.append({
+                    'data': subject_data,
+                    'error': serializer.errors
+                })
+        
+        return Response({
+            'created': len(created),
+            'failed': len(errors),
+            'created_subjects': created,
+            'errors': errors
+        })

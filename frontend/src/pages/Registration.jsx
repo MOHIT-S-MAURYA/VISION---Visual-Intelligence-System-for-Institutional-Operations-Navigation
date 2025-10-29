@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import Webcam from "react-webcam";
+import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -14,6 +15,15 @@ export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [frames, setFrames] = useState([]);
   const [frameCount, setFrameCount] = useState(5);
+
+  // Get available years based on selected department
+  const availableYears = department ? getYearOptions(department) : [];
+
+  // Reset year when department changes
+  const handleDepartmentChange = (value) => {
+    setDepartment(value);
+    setClassYear(""); // Reset year when department changes
+  };
 
   const capture = async () => {
     // capture N frames over ~1s window
@@ -107,20 +117,24 @@ export default function Registration() {
             hint="Student's complete name"
             required
           />
-          <Input
+          <Select
             label="Department"
             value={department}
-            onChange={setDepartment}
-            placeholder="e.g., CSE, ECE, MECH"
-            hint="Department or branch name"
+            onChange={handleDepartmentChange}
+            options={DEPARTMENTS.map((d) => ({
+              value: d.value,
+              label: d.label,
+            }))}
+            hint="Select department or program"
             required
           />
-          <Input
+          <Select
             label="Class / Year"
             value={classYear}
             onChange={setClassYear}
-            placeholder="e.g., First Year, Second Year"
-            hint="Current year or class"
+            options={availableYears}
+            hint="Select current year"
+            disabled={!department}
             required
           />
         </div>
@@ -224,6 +238,37 @@ function Input({ label, value, onChange, required, placeholder, hint }) {
         className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options, hint, required, disabled }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        disabled={disabled}
+        className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      >
+        <option value="">-- Select {label} --</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {disabled && (
+        <p className="text-xs text-orange-600 mt-1">
+          Please select a department first
+        </p>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Registration from "./pages/Registration";
 import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
 import Students from "./pages/Students";
+import SubjectsManagement from "./pages/SubjectsManagement";
 import Login from "./pages/Login";
 
 function ProtectedRoute({ children }) {
@@ -52,6 +53,9 @@ export default function App() {
             <Link to="/students" className="hover:underline">
               Students
             </Link>
+            <Link to="/subjects" className="hover:underline">
+              Subjects
+            </Link>
             <Link to="/attendance" className="hover:underline">
               Attendance
             </Link>
@@ -82,6 +86,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Students />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subjects"
+            element={
+              <ProtectedRoute>
+                <SubjectsManagement />
               </ProtectedRoute>
             }
           />

@@ -16,3 +16,20 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.roll_number} - {self.full_name}"
+
+
+class Subject(models.Model):
+    """Subject model for storing subjects by department and year"""
+    department = models.CharField(max_length=100)
+    class_year = models.CharField(max_length=50)
+    subject_name = models.CharField(max_length=200)
+    subject_code = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['department', 'class_year', 'subject_name']
+        unique_together = ['department', 'class_year', 'subject_name']
+
+    def __str__(self):
+        return f"{self.department} - {self.class_year} - {self.subject_name}"
