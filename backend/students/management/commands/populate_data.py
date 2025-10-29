@@ -6,6 +6,8 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from students.models import Department, Teacher, Subject, Student, TeacherSubjectAssignment
 from django.db import transaction
+from django.conf import settings
+import os
 
 
 class Command(BaseCommand):
@@ -302,6 +304,62 @@ class Command(BaseCommand):
                 )
                 self.stdout.write(f'  ✓ {roll} - {name}')
             
+            # Generate credentials file for teachers
+            self.stdout.write('Generating teacher credentials file...')
+            credentials_content = """# TEACHER CREDENTIALS
+# Generated on database population
+# IMPORTANT: Share these credentials securely with respective teachers
+
+=========================================================================
+ADMIN ACCOUNT
+=========================================================================
+Username: admin
+Password: admin123
+Access: Full system access via Django Admin Panel
+
+=========================================================================
+TEACHER ACCOUNTS
+=========================================================================
+All teachers have the default password: teacher123
+Teachers should change their password after first login.
+
+Teachers can login using EITHER their username OR employee ID.
+
+"""
+            
+            for teacher in Teacher.objects.all().order_by('employee_id'):
+                credentials_content += f"\n{'='*70}\n"
+                credentials_content += f"Name: {teacher.full_name}\n"
+                credentials_content += f"Employee ID: {teacher.employee_id} (can be used for login)\n"
+                credentials_content += f"Username: {teacher.user.username} (can be used for login)\n"
+                credentials_content += f"Password: teacher123\n"
+                credentials_content += f"Email: {teacher.email or 'Not provided'}\n"
+                credentials_content += f"Phone: {teacher.phone or 'Not provided'}\n"
+                
+                # List assigned subjects
+                assignments = TeacherSubjectAssignment.objects.filter(teacher=teacher, is_active=True)
+                if assignments.exists():
+                    credentials_content += f"\nAssigned Subjects:\n"
+                    for assignment in assignments:
+                        credentials_content += f"  • {assignment.subject.subject_name} "
+                        credentials_content += f"({assignment.subject.department.code} - "
+                        credentials_content += f"{assignment.subject.class_year})\n"
+            
+            credentials_content += f"\n{'='*70}\n"
+            credentials_content += "\nNOTE FOR ADMIN:\n"
+            credentials_content += "1. Share credentials securely with each teacher\n"
+            credentials_content += "2. Teachers can login with username OR employee ID\n"
+            credentials_content += "3. Ask teachers to change password after first login\n"
+            credentials_content += "4. To create new teachers: Use Django Admin Panel\n"
+            credentials_content += "5. To assign subjects: Use Django Admin Panel > Teacher Subject Assignments\n"
+            
+            # Write to file
+            credentials_file = os.path.join(settings.BASE_DIR, 'TEACHER_CREDENTIALS.txt')
+            with open(credentials_file, 'w') as f:
+                f.write(credentials_content)
+            
+            self.stdout.write(self.style.SUCCESS(f'✓ Credentials saved to: {credentials_file}'))
+            
             self.stdout.write(self.style.SUCCESS('\n' + '='*70))
             self.stdout.write(self.style.SUCCESS('Database populated successfully!'))
             self.stdout.write(self.style.SUCCESS('='*70))
@@ -311,12 +369,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('  Username: admin'))
             self.stdout.write(self.style.SUCCESS('  Password: admin123'))
             self.stdout.write(self.style.SUCCESS('\nTeacher Accounts (all have same password):'))
-            self.stdout.write(self.style.SUCCESS('  Usernames: dr.sharma, prof.gupta, dr.kumar, dr.patel, etc.'))
+            self.stdout.write(self.style.SUCCESS('  Login with: username OR employee_id'))
             self.stdout.write(self.style.SUCCESS('  Password: teacher123'))
             self.stdout.write(self.style.SUCCESS('\nExample Teacher Logins:'))
-            self.stdout.write(self.style.SUCCESS('  dr.sharma / teacher123 (CSE Faculty)'))
-            self.stdout.write(self.style.SUCCESS('  prof.gupta / teacher123 (CSE Faculty)'))
-            self.stdout.write(self.style.SUCCESS('  dr.patel / teacher123 (ECE Faculty)'))
+            self.stdout.write(self.style.SUCCESS('  dr.sharma / teacher123 OR T001 / teacher123 (CSE Faculty)'))
+            self.stdout.write(self.style.SUCCESS('  prof.gupta / teacher123 OR T002 / teacher123 (CSE Faculty)'))
+            self.stdout.write(self.style.SUCCESS('  dr.patel / teacher123 OR T004 / teacher123 (ECE Faculty)'))
             self.stdout.write(self.style.SUCCESS('='*70))
             self.stdout.write(self.style.SUCCESS(f'\nSummary:'))
             self.stdout.write(self.style.SUCCESS(f'  • {Department.objects.count()} Departments'))
@@ -324,4 +382,5 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'  • {Subject.objects.count()} Subjects'))
             self.stdout.write(self.style.SUCCESS(f'  • {TeacherSubjectAssignment.objects.count()} Teacher Assignments'))
             self.stdout.write(self.style.SUCCESS(f'  • {Student.objects.count()} Students'))
+            self.stdout.write(self.style.SUCCESS(f'  • Teacher credentials saved to: TEACHER_CREDENTIALS.txt'))
             self.stdout.write(self.style.SUCCESS('='*70 + '\n'))

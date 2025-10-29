@@ -71,17 +71,17 @@ export default function Login() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username
+              Username or Employee ID
             </label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
+              placeholder="e.g., dr.sharma or T001"
               className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               autoComplete="username"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Use your teacher account username
+              You can use either your username or employee ID
             </p>
           </div>
           <div>
