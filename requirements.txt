@@ -1,0 +1,22 @@
+# Combined requirements for the entire project
+
+# Django Backend
+Django==4.2.7
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+python-decouple==3.8
+
+# FastAPI AI Service
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# AI/ML Libraries
+opencv-python==4.8.1.78
+deepface==0.0.79
+tensorflow==2.15.0
+faiss-cpu==1.7.4
+numpy==1.24.3
+
+# Common
+Pillow==10.1.0

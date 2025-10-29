@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Start Attendance - Face Recognition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    <div class="min-h-screen max-w-5xl mx-auto p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">Live Attendance</h1>
+        <a href="index.html" class="text-blue-600 hover:underline"
+          >← Back to Dashboard</a
+        >
+      </div>
+
+      <!-- Create Session Card -->
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Create Attendance Session</h2>
+        <form id="sessionForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Department</label>
+            <input
+              id="department"
+              class="w-full border rounded px-3 py-2"
+              placeholder="Computer Science"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Class / Year</label>
+            <input
+              id="class_year"
+              class="w-full border rounded px-3 py-2"
+              placeholder="2025"
+              required
+            />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Subject</label>
+            <input
+              id="subject"
+              class="w-full border rounded px-3 py-2"
+              placeholder="AI"
+              required
+            />
+          </div>
+          <div class="flex items-end">
+            <button
+              id="createSessionBtn"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
+            >
+              Create Session
+            </button>
+          </div>
+        </form>
+        <p id="sessionInfo" class="mt-3 text-sm text-gray-600 hidden"></p>
+      </div>
+
+      <!-- Camera & Controls -->
+      <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Live Camera</h2>
+        <div class="flex flex-col md:flex-row gap-6 items-start">
+          <div>
+            <video
+              id="video"
+              width="480"
+              height="360"
+              autoplay
+              class="rounded border"
+            ></video>
+            <canvas
+              id="canvas"
+              width="480"
+              height="360"
+              class="hidden"
+            ></canvas>
+            <div class="mt-3 flex gap-3">
+              <button
+                id="startCameraBtn"
+                class="bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Open Camera
+              </button>
+              <button
+                id="startAttendanceBtn"
+                class="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                disabled
+              >
+                Start Attendance
+              </button>
+              <button
+                id="stopAttendanceBtn"
+                class="bg-red-600 text-white px-4 py-2 rounded hidden"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 w-full">
+            <h3 class="font-semibold mb-2">Recognized Students</h3>
+            <div
+              id="recognizedList"
+              class="space-y-2 max-h-80 overflow-auto border rounded p-3 bg-gray-50"
+            ></div>
+          </div>
+        </div>
+        <p id="statusMsg" class="mt-3 text-sm text-gray-600"></p>
+      </div>
+
+      <div class="text-xs text-gray-500">
+        Tip: Creating a session enables recognition. Frames are captured every 2
+        seconds while running.
+      </div>
+    </div>
+
+    <script>
+      const API_URL = "http://localhost:8000";
+
+      let stream = null;
+      let sessionId = null;
+      let captureTimer = null;
+
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const startCameraBtn = document.getElementById("startCameraBtn");
+      const startAttendanceBtn = document.getElementById("startAttendanceBtn");
+      const stopAttendanceBtn = document.getElementById("stopAttendanceBtn");
+      const sessionInfo = document.getElementById("sessionInfo");
+      const recognizedList = document.getElementById("recognizedList");
+      const statusMsg = document.getElementById("statusMsg");
+
+      // Create session
+      document
+        .getElementById("sessionForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const payload = {
+            department: document.getElementById("department").value,
+            class_year: document.getElementById("class_year").value,
+            subject: document.getElementById("subject").value,
+          };
+          try {
+            const res = await fetch(`${API_URL}/api/attendance/sessions/`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok)
+              throw new Error(data.error || "Failed to create session");
+            sessionId = data.id;
+            sessionInfo.textContent = `Session #${sessionId} created for ${data.department} - ${data.class_year} - ${data.subject}`;
+            sessionInfo.classList.remove("hidden");
+            startAttendanceBtn.disabled = false;
+          } catch (err) {
+            sessionInfo.textContent = `Error: ${err.message}`;
+            sessionInfo.classList.remove("hidden");
+          }
+        });
+
+      // Camera controls
+      startCameraBtn.addEventListener("click", async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+        } catch (err) {
+          statusMsg.textContent = "Camera error: " + err.message;
+        }
+      });
+
+      // Start attendance
+      startAttendanceBtn.addEventListener("click", () => {
+        if (!sessionId) {
+          statusMsg.textContent = "Create a session first.";
+          return;
+        }
+        if (!stream) {
+          statusMsg.textContent = "Open camera first.";
+          return;
+        }
+        startAttendanceBtn.disabled = true;
+        stopAttendanceBtn.classList.remove("hidden");
+        statusMsg.textContent = "Recognition running...";
+
+        captureTimer = setInterval(captureAndSend, 2000);
+        captureAndSend(); // fire immediately
+      });
+
+      // Stop attendance
+      stopAttendanceBtn.addEventListener("click", async () => {
+        clearInterval(captureTimer);
+        stopAttendanceBtn.classList.add("hidden");
+        startAttendanceBtn.disabled = false;
+        statusMsg.textContent = "Recognition stopped.";
+        try {
+          if (sessionId) {
+            await fetch(
+              `${API_URL}/api/attendance/sessions/${sessionId}/end_session/`,
+              { method: "POST" }
+            );
+          }
+        } catch (err) {}
+      });
+
+      async function captureAndSend() {
+        // draw frame
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.9)
+        );
+
+        const formData = new FormData();
+        formData.append("face_image", blob, "frame.jpg");
+        try {
+          const res = await fetch(
+            `${API_URL}/api/attendance/sessions/${sessionId}/recognize/`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+          const data = await res.json();
+          if (res.ok && data.recognized) {
+            appendRecognized(data);
+          }
+        } catch (err) {
+          // network errors are ignored to keep loop running
+        }
+      }
+
+      function appendRecognized(data) {
+        const item = document.createElement("div");
+        item.className =
+          "bg-white border rounded p-3 flex items-center justify-between";
+        item.innerHTML = `
+        <div>
+          <div class="font-semibold">${
+            data.student.full_name
+          } <span class="text-gray-500">(${
+          data.student.roll_number
+        })</span></div>
+          <div class="text-sm text-gray-600">${data.student.department} • ${
+          data.student.class_year
+        }</div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge bg-green-100 text-green-800 border border-green-300">Present</span>
+          <span class="text-sm text-gray-700">Confidence: ${(
+            data.confidence * 100
+          ).toFixed(1)}%</span>
+        </div>
+      `;
+        recognizedList.prepend(item);
+      }
+    </script>
+  </body>
+</html>

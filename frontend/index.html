@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Recognition Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100">
+    <div class="min-h-screen">
+      <!-- Header -->
+      <header class="bg-blue-600 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <h1 class="text-3xl font-bold">Face Recognition Attendance System</h1>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <!-- Register Student Card -->
+          <div
+            class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition duration-300"
+          >
+            <div class="p-6">
+              <div
+                class="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4"
+              >
+                <span class="text-3xl">👤</span>
+              </div>
+              <h3 class="text-xl font-bold text-gray-900 mb-2">
+                Register Student
+              </h3>
+              <p class="text-gray-600 mb-4">
+                Add a new student with face capture for attendance tracking
+              </p>
+              <a
+                href="registration.html"
+                class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+              >
+                Register →
+              </a>
+            </div>
+          </div>
+
+          <!-- Start Attendance Card -->
+          <div
+            class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition duration-300"
+          >
+            <div class="p-6">
+              <div
+                class="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4"
+              >
+                <span class="text-3xl">📸</span>
+              </div>
+              <h3 class="text-xl font-bold text-gray-900 mb-2">
+                Start Attendance
+              </h3>
+              <p class="text-gray-600 mb-4">
+                Begin live face recognition for automatic attendance marking
+              </p>
+              <a
+                href="attendance.html"
+                class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+              >
+                Start →
+              </a>
+            </div>
+          </div>
+
+          <!-- View Reports Card -->
+          <div
+            class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition duration-300"
+          >
+            <div class="p-6">
+              <div
+                class="flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4"
+              >
+                <span class="text-3xl">📊</span>
+              </div>
+              <h3 class="text-xl font-bold text-gray-900 mb-2">View Reports</h3>
+              <p class="text-gray-600 mb-4">
+                Access attendance records and generate reports
+              </p>
+              <a
+                href="reports.html"
+                class="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+              >
+                View →
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="mt-12 bg-white shadow-lg rounded-lg p-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-6">System Status</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="border-l-4 border-blue-500 pl-4">
+              <p class="text-gray-600 text-sm">Total Students</p>
+              <p id="totalStudents" class="text-3xl font-bold text-gray-900">
+                -
+              </p>
+            </div>
+            <div class="border-l-4 border-green-500 pl-4">
+              <p class="text-gray-600 text-sm">Backend Status</p>
+              <p id="backendStatus" class="text-3xl font-bold">🔄</p>
+            </div>
+            <div class="border-l-4 border-purple-500 pl-4">
+              <p class="text-gray-600 text-sm">AI Service Status</p>
+              <p id="aiStatus" class="text-3xl font-bold">🔄</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Guide -->
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 class="text-lg font-bold text-blue-900 mb-3">
+            🚀 Quick Start Guide
+          </h3>
+          <ol class="list-decimal list-inside space-y-2 text-blue-800">
+            <li>Register students with their face capture</li>
+            <li>Start an attendance session for your class</li>
+            <li>Let the camera recognize student faces automatically</li>
+            <li>View and export attendance reports</li>
+          </ol>
+        </div>
+      </main>
+
+      <!-- Footer -->
+      <footer class="bg-gray-800 text-white mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6 text-center">
+          <p>&copy; 2025 Face Recognition Attendance System</p>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const API_URL = "http://localhost:8000";
+      const AI_URL = "http://localhost:8001";
+
+      // Check system status
+      async function checkStatus() {
+        // Check backend
+        try {
+          const response = await fetch(`${API_URL}/api/students/`);
+          if (response.ok) {
+            document.getElementById("backendStatus").textContent = "✅";
+            const data = await response.json();
+            document.getElementById("totalStudents").textContent = data.length;
+          } else {
+            document.getElementById("backendStatus").textContent = "❌";
+          }
+        } catch (err) {
+          document.getElementById("backendStatus").textContent = "❌";
+          document.getElementById("totalStudents").textContent = "0";
+        }
+
+        // Check AI service
+        try {
+          const response = await fetch(`${AI_URL}/`);
+          if (response.ok) {
+            document.getElementById("aiStatus").textContent = "✅";
+          } else {
+            document.getElementById("aiStatus").textContent = "❌";
+          }
+        } catch (err) {
+          document.getElementById("aiStatus").textContent = "❌";
+        }
+      }
+
+      // Check status on page load
+      checkStatus();
+
+      // Refresh status every 30 seconds
+      setInterval(checkStatus, 30000);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Registration - Face Recognition Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100">
+    <div
+      class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
+    >
+      <div class="max-w-2xl w-full space-y-8">
+        <div>
+          <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Student Registration
+          </h2>
+          <p class="mt-2 text-center text-sm text-gray-600">
+            Register a new student with face capture
+          </p>
+        </div>
+
+        <div class="bg-white shadow-md rounded-lg p-8">
+          <form id="registrationForm" class="space-y-6">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label
+                  for="roll_number"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Roll Number *
+                </label>
+                <input
+                  type="text"
+                  id="roll_number"
+                  name="roll_number"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="full_name"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  id="full_name"
+                  name="full_name"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="department"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Department *
+                </label>
+                <select
+                  id="department"
+                  name="department"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Department</option>
+                  <option value="Computer Science">Computer Science</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Mechanical">Mechanical</option>
+                  <option value="Civil">Civil</option>
+                  <option value="Electrical">Electrical</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  for="class_year"
+                  class="block text-sm font-medium text-gray-700"
+                >
+                  Class / Year *
+                </label>
+                <select
+                  id="class_year"
+                  name="class_year"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Year</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-200 pt-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">
+                Face Capture
+              </h3>
+
+              <div class="flex flex-col items-center space-y-4">
+                <div id="cameraContainer" class="hidden">
+                  <video
+                    id="video"
+                    width="480"
+                    height="360"
+                    autoplay
+                    class="rounded-lg border-4 border-gray-300"
+                  ></video>
+                </div>
+
+                <canvas
+                  id="canvas"
+                  width="480"
+                  height="360"
+                  class="hidden"
+                ></canvas>
+
+                <div id="capturedImage" class="hidden">
+                  <img
+                    id="preview"
+                    src=""
+                    alt="Captured face"
+                    class="rounded-lg border-4 border-green-500 max-w-md"
+                  />
+                </div>
+
+                <div class="flex space-x-4">
+                  <button
+                    type="button"
+                    id="startCameraBtn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+                  >
+                    📷 Open Camera
+                  </button>
+
+                  <button
+                    type="button"
+                    id="captureFaceBtn"
+                    class="hidden bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+                  >
+                    ✨ Capture Face
+                  </button>
+
+                  <button
+                    type="button"
+                    id="retakeBtn"
+                    class="hidden bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200"
+                  >
+                    🔄 Retake
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end space-x-4">
+              <button
+                type="button"
+                onclick="window.location.reload()"
+                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                id="submitBtn"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+              >
+                Register Student
+              </button>
+            </div>
+          </form>
+
+          <div id="message" class="mt-4 hidden">
+            <div class="p-4 rounded-lg"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const API_URL = "http://localhost:8000";
+
+      let stream = null;
+      let capturedImageBlob = null;
+
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const startCameraBtn = document.getElementById("startCameraBtn");
+      const captureFaceBtn = document.getElementById("captureFaceBtn");
+      const retakeBtn = document.getElementById("retakeBtn");
+      const cameraContainer = document.getElementById("cameraContainer");
+      const capturedImage = document.getElementById("capturedImage");
+      const preview = document.getElementById("preview");
+      const submitBtn = document.getElementById("submitBtn");
+      const form = document.getElementById("registrationForm");
+      const message = document.getElementById("message");
+
+      // Start camera
+      startCameraBtn.addEventListener("click", async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+          cameraContainer.classList.remove("hidden");
+          captureFaceBtn.classList.remove("hidden");
+          startCameraBtn.classList.add("hidden");
+        } catch (err) {
+          showMessage("Error accessing camera: " + err.message, "error");
+        }
+      });
+
+      // Capture face
+      captureFaceBtn.addEventListener("click", () => {
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0, 480, 360);
+
+        canvas.toBlob(
+          (blob) => {
+            capturedImageBlob = blob;
+            preview.src = URL.createObjectURL(blob);
+
+            // Stop camera
+            if (stream) {
+              stream.getTracks().forEach((track) => track.stop());
+            }
+
+            // Update UI
+            cameraContainer.classList.add("hidden");
+            captureFaceBtn.classList.add("hidden");
+            capturedImage.classList.remove("hidden");
+            retakeBtn.classList.remove("hidden");
+            submitBtn.disabled = false;
+          },
+          "image/jpeg",
+          0.95
+        );
+      });
+
+      // Retake photo
+      retakeBtn.addEventListener("click", () => {
+        capturedImageBlob = null;
+        capturedImage.classList.add("hidden");
+        retakeBtn.classList.add("hidden");
+        startCameraBtn.classList.remove("hidden");
+        submitBtn.disabled = true;
+      });
+
+      // Submit form
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        if (!capturedImageBlob) {
+          showMessage("Please capture a face image", "error");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Registering...";
+
+        try {
+          const formData = new FormData();
+          formData.append(
+            "roll_number",
+            document.getElementById("roll_number").value
+          );
+          formData.append(
+            "full_name",
+            document.getElementById("full_name").value
+          );
+          formData.append(
+            "department",
+            document.getElementById("department").value
+          );
+          formData.append(
+            "class_year",
+            document.getElementById("class_year").value
+          );
+          formData.append("face_image", capturedImageBlob, "face.jpg");
+
+          const response = await fetch(
+            `${API_URL}/api/students/register_with_face/`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const data = await response.json();
+
+          if (response.ok) {
+            showMessage("✅ Student registered successfully!", "success");
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else {
+            showMessage(
+              "❌ Error: " + (data.error || "Registration failed"),
+              "error"
+            );
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Register Student";
+          }
+        } catch (err) {
+          showMessage("❌ Network error: " + err.message, "error");
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Register Student";
+        }
+      });
+
+      function showMessage(text, type) {
+        const messageDiv = message.querySelector("div");
+        messageDiv.textContent = text;
+        messageDiv.className = `p-4 rounded-lg ${
+          type === "success"
+            ? "bg-green-100 text-green-800 border border-green-400"
+            : "bg-red-100 text-red-800 border border-red-400"
+        }`;
+        message.classList.remove("hidden");
+
+        setTimeout(() => {
+          message.classList.add("hidden");
+        }, 5000);
+      }
+    </script>
+  </body>
+</html>
