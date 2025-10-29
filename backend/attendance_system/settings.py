@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'attendance_system.middleware.JWTToSessionMiddleware',  # JWT to Session transfer
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -86,6 +87,13 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'attendance_system.auth_backend.JWTAuthenticationBackend',  # JWT auth for admin
+    'django.contrib.auth.backends.ModelBackend',  # Default backend
+]
 
 
 # Password validation

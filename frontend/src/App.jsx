@@ -133,6 +133,29 @@ export default function App() {
     window.dispatchEvent(new StorageEvent("storage", { key: "teacher_token" }));
   }
 
+  function openAdminPanel() {
+    const token = localStorage.getItem("teacher_token");
+    if (token) {
+      // Create a form to POST the token to admin
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = `${API_URL}/admin/jwt-login/`;
+      form.target = "_blank";
+
+      const tokenInput = document.createElement("input");
+      tokenInput.type = "hidden";
+      tokenInput.name = "token";
+      tokenInput.value = token;
+      form.appendChild(tokenInput);
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } else {
+      window.open(`${API_URL}/admin/`, "_blank");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-blue-600 text-white shadow">
@@ -159,14 +182,12 @@ export default function App() {
                 {isAdmin && (
                   <>
                     <span className="text-yellow-300">|</span>
-                    <a
-                      href={`${API_URL}/admin/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={openAdminPanel}
                       className="hover:underline text-yellow-300"
                     >
                       Admin Panel ↗
-                    </a>
+                    </button>
                   </>
                 )}
               </>

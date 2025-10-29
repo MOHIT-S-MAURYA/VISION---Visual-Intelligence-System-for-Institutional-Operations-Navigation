@@ -20,8 +20,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views_auth import me
+from .admin_auth import jwt_admin_login
 
 urlpatterns = [
+    path('admin/jwt-login/', jwt_admin_login, name='jwt_admin_login'),
     path('admin/', admin.site.urls),
     path('api/', include('students.urls')),
     path('api/attendance/', include('attendance.urls')),
