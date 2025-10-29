@@ -5,10 +5,7 @@ import Registration from "./pages/Registration";
 import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
 import Students from "./pages/Students";
-import SubjectsManagement from "./pages/SubjectsManagement";
-import TeacherAssignments from "./pages/TeacherAssignments";
 import Login from "./pages/Login";
-import TeacherRegistration from "./pages/TeacherRegistration";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -162,18 +159,14 @@ export default function App() {
                 {isAdmin && (
                   <>
                     <span className="text-yellow-300">|</span>
-                    <Link
-                      to="/subjects"
+                    <a
+                      href={`${API_URL}/admin/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="hover:underline text-yellow-300"
                     >
-                      Subjects
-                    </Link>
-                    <Link
-                      to="/assignments"
-                      className="hover:underline text-yellow-300"
-                    >
-                      Assignments
-                    </Link>
+                      Admin Panel ↗
+                    </a>
                   </>
                 )}
               </>
@@ -199,9 +192,6 @@ export default function App() {
               <>
                 <Link to="/login" className="hover:underline">
                   Login
-                </Link>
-                <Link to="/teacher-register" className="hover:underline">
-                  Register as Teacher
                 </Link>
               </>
             )}
@@ -235,22 +225,6 @@ export default function App() {
             }
           />
           <Route
-            path="/subjects"
-            element={
-              <AdminRoute>
-                <SubjectsManagement />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/assignments"
-            element={
-              <AdminRoute>
-                <TeacherAssignments />
-              </AdminRoute>
-            }
-          />
-          <Route
             path="/attendance"
             element={
               <ProtectedRoute>
@@ -267,7 +241,7 @@ export default function App() {
             }
           />
           <Route path="/login" element={<Login />} />
-          <Route path="/teacher-register" element={<TeacherRegistration />} />
+          {/* Teacher accounts, departments, subjects, and assignments are managed via Django Admin Panel */}
         </Routes>
       </main>
     </div>
