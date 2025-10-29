@@ -123,7 +123,9 @@ export default function TeacherAssignments() {
 
   async function deleteAssignment(assignment) {
     if (
-      !confirm(`Remove assignment for ${getTeacherName(assignment.teacher)}?`)
+      !window.confirm(
+        `Remove assignment for ${getTeacherName(assignment.teacher)}?`
+      )
     )
       return;
 

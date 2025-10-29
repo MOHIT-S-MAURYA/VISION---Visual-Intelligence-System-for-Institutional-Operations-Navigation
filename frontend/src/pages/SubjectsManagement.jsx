@@ -137,6 +137,7 @@ export default function SubjectsManagement() {
 
   useEffect(() => {
     loadSubjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.department, filters.classYear]);
 
   const filteredSubjects = subjects.filter((s) => {
