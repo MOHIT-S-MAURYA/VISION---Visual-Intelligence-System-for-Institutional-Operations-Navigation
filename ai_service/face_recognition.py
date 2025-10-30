@@ -1,12 +1,19 @@
 """Face recognition utilities using InsightFace (ArcFace) and FAISS
 
 Enhancements:
-- Multi-frame enrollment and recognition with basic quality filtering
+- Multi-frame enrollment and recognition with quality filtering
 - Aggregation of embeddings across frames (mean of top-K by quality)
+- HNSW index for fast similarity search at scale
+- Quality gating to prevent low-quality registrations
+- Metadata storage for tracking and analytics
+- Performance monitoring and metrics
 """
 import os
 import pickle
-from typing import Optional, List, Tuple
+import json
+import time
+from typing import Optional, List, Tuple, Dict, Any
+from datetime import datetime
 
 import faiss
 import numpy as np
@@ -25,7 +32,17 @@ def _l2_normalize(vec: np.ndarray, eps: float = 1e-10) -> np.ndarray:
 
 
 class FaceRecognitionSystem:
-    def __init__(self, index_path: str = "faiss_index"):
+    # Quality thresholds
+    MIN_QUALITY_THRESHOLD = 0.65  # Minimum quality score for registration
+    RECOGNITION_THRESHOLD = 0.70   # Similarity threshold for recognition (70%)
+    
+    def __init__(self, index_path: str = "faiss_index", use_hnsw: bool = True):
+        """Initialize face recognition system with enhanced features.
+        
+        Args:
+            index_path: Directory to store FAISS index and metadata
+            use_hnsw: Use HNSW index for faster search (recommended for >100 students)
+        """
         # Persist FAISS artifacts relative to this file so they survive cwd changes
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.index_dir = os.path.join(base_dir, index_path)
@@ -33,43 +50,106 @@ class FaceRecognitionSystem:
 
         self.index: Optional[faiss.Index] = None
         self.student_ids: list[str] = []
+        self.metadata: Dict[str, Dict[str, Any]] = {}  # Store metadata per student
+        self.use_hnsw = use_hnsw
+        
         # ArcFace (buffalo_l) embedding dimension
         self.dimension = 512
+        
+        # Performance metrics
+        self.metrics = {
+            'search_times': [],
+            'registration_times': [],
+            'quality_scores': [],
+            'total_searches': 0,
+            'total_registrations': 0
+        }
 
         # Initialize InsightFace FaceAnalysis (CPU)
+        # buffalo_l: Best balance of speed and accuracy (99.4% on LFW)
         self.face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
         # Larger det_size improves detection quality
         self.face_app.prepare(ctx_id=0, det_size=(640, 640))
 
         self.load_or_create_index()
+        print(f"✓ FaceRecognitionSystem initialized")
+        print(f"  - Model: InsightFace buffalo_l (ArcFace)")
+        print(f"  - Index type: {'HNSW (fast)' if use_hnsw else 'Flat (exact)'}")
+        print(f"  - Dimension: {self.dimension}")
+        print(f"  - Students registered: {len(self.student_ids)}")
 
     def load_or_create_index(self) -> None:
-        """Load existing FAISS index or create a new one."""
+        """Load existing FAISS index or create a new one with optional HNSW."""
         index_file = os.path.join(self.index_dir, "index.faiss")
         ids_file = os.path.join(self.index_dir, "student_ids.pkl")
+        metadata_file = os.path.join(self.index_dir, "metadata.json")
 
         if os.path.exists(index_file) and os.path.exists(ids_file):
             self.index = faiss.read_index(index_file)
             with open(ids_file, "rb") as f:
                 self.student_ids = pickle.load(f)
+            
+            # Load metadata if exists
+            if os.path.exists(metadata_file):
+                with open(metadata_file, "r") as f:
+                    self.metadata = json.load(f)
+            
             # Safety: ensure index dimension matches expected
             if self.index.d != self.dimension:
-                # Recreate an empty index if incompatible (rare)
-                self.index = faiss.IndexFlatIP(self.dimension)
-                self.student_ids = []
+                print(f"⚠️  Index dimension mismatch: {self.index.d} != {self.dimension}. Recreating...")
+                self._create_new_index()
         else:
+            self._create_new_index()
+    
+    def _create_new_index(self) -> None:
+        """Create a new FAISS index based on configuration."""
+        if self.use_hnsw:
+            # HNSW: Hierarchical Navigable Small World
+            # Best for: Fast approximate search, read-heavy workloads
+            # M=32: number of bi-directional links per node (higher = more accuracy, more memory)
+            # efConstruction=40: quality during construction
+            # efSearch will be set dynamically during search
+            self.index = faiss.IndexHNSWFlat(self.dimension, 32)
+            self.index.hnsw.efConstruction = 40
+            print("✓ Created HNSW index for fast similarity search")
+        else:
+            # Flat: Exact brute-force search using inner product
             # Use inner product on L2-normalized embeddings -> cosine similarity
             self.index = faiss.IndexFlatIP(self.dimension)
-            self.student_ids = []
+            print("✓ Created Flat index for exact search")
+        
+        self.student_ids = []
+        self.metadata = {}
 
     def save_index(self) -> None:
-        """Persist FAISS index and student IDs to disk."""
+        """Persist FAISS index, student IDs, and metadata to disk."""
         index_file = os.path.join(self.index_dir, "index.faiss")
         ids_file = os.path.join(self.index_dir, "student_ids.pkl")
+        metadata_file = os.path.join(self.index_dir, "metadata.json")
+        
+        # Create backup before saving (keep last version)
+        backup_dir = os.path.join(self.index_dir, "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        if os.path.exists(index_file):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(backup_dir, f"index_backup_{timestamp}.faiss")
+            try:
+                import shutil
+                shutil.copy2(index_file, backup_file)
+                # Keep only last 3 backups
+                backups = sorted([f for f in os.listdir(backup_dir) if f.startswith("index_backup_")])
+                for old_backup in backups[:-3]:
+                    os.remove(os.path.join(backup_dir, old_backup))
+            except Exception as e:
+                print(f"⚠️  Backup failed: {e}")
 
+        # Save index and data
         faiss.write_index(self.index, index_file)
         with open(ids_file, "wb") as f:
             pickle.dump(self.student_ids, f)
+        with open(metadata_file, "w") as f:
+            json.dump(self.metadata, f, indent=2)
 
     def extract_embedding(self, image_path: str) -> np.ndarray:
         """Extract a L2-normalized face embedding using InsightFace ArcFace.
@@ -94,27 +174,64 @@ class FaceRecognitionSystem:
         except Exception as e:
             raise Exception(f"Face extraction failed: {str(e)}")
 
-    # -------- Quality utilities --------
+    # -------- Enhanced Quality Assessment --------
     @staticmethod
-    def _image_quality_score(image_path: str) -> float:
-        """Compute a simple quality score combining blur and brightness.
+    def _image_quality_score(image_path: str, face_obj=None) -> float:
+        """Compute comprehensive quality score for face image.
 
-        - Blur: Variance of Laplacian (higher is sharper)
-        - Brightness: mean pixel intensity (prefer mid-range)
-        Score is a weighted sum scaled to ~[0, 1].
+        Factors considered:
+        - Sharpness/Blur: Variance of Laplacian (40% weight)
+        - Brightness: Mean pixel intensity (25% weight)
+        - Face Size: Larger faces = better quality (20% weight)
+        - Detection Confidence: InsightFace detection score (15% weight)
+        
+        Returns: Quality score in range [0.0, 1.0]
         """
         img = cv2.imread(image_path)
         if img is None:
             return 0.0
+        
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # Blur measure
-        fm = cv2.Laplacian(gray, cv2.CV_64F).var()
-        # Brightness measure (target ~130)
+        h, w = gray.shape
+        
+        # 1. Sharpness (Laplacian variance) - 40%
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        # Normalize: typical range 0-500, good images > 100
+        sharpness_score = min(laplacian_var / 150.0, 1.0)
+        
+        # 2. Brightness (optimal range: 100-150) - 25%
         mean_brightness = float(np.mean(gray))
-        brightness_score = 1.0 - min(abs(mean_brightness - 130.0) / 130.0, 1.0)
-        # Normalize focus measure roughly (tune 100.0 based on webcam)
-        focus_score = min(fm / 100.0, 1.0)
-        return 0.7 * focus_score + 0.3 * brightness_score
+        brightness_score = 1.0 - min(abs(mean_brightness - 125.0) / 125.0, 1.0)
+        
+        # 3. Face Size (percentage of image area) - 20%
+        face_size_score = 0.5  # default
+        if face_obj is not None:
+            bbox = face_obj.bbox
+            face_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+            image_area = h * w
+            face_ratio = face_area / image_area
+            # Optimal face size: 15-40% of image
+            if 0.15 <= face_ratio <= 0.40:
+                face_size_score = 1.0
+            elif face_ratio < 0.15:
+                face_size_score = face_ratio / 0.15  # Too small
+            else:
+                face_size_score = max(0.4, 1.0 - (face_ratio - 0.40) / 0.30)  # Too large
+        
+        # 4. Detection Confidence - 15%
+        det_confidence_score = 0.8  # default
+        if face_obj is not None and hasattr(face_obj, 'det_score'):
+            det_confidence_score = min(face_obj.det_score, 1.0)
+        
+        # Weighted combination
+        total_score = (
+            0.40 * sharpness_score +
+            0.25 * brightness_score +
+            0.20 * face_size_score +
+            0.15 * det_confidence_score
+        )
+        
+        return round(total_score, 3)
 
     def _aggregate_embeddings(self, emb_list: List[np.ndarray], topk: int = 5) -> Optional[np.ndarray]:
         if not emb_list:
@@ -172,34 +289,80 @@ class FaceRecognitionSystem:
         # Sort by quality desc and aggregate top frames
         scored.sort(key=lambda x: x[0], reverse=True)
         emb_list = [e for _, e in scored]
+        quality_scores = [q for q, _ in scored]
+        
+        # Quality Gating: Check if best frame meets minimum quality
+        best_quality = quality_scores[0]
+        avg_quality = np.mean(quality_scores)
+        
+        if best_quality < self.MIN_QUALITY_THRESHOLD:
+            raise Exception(
+                f"Face quality too low (best: {best_quality:.2f}, required: {self.MIN_QUALITY_THRESHOLD:.2f}). "
+                f"Please ensure good lighting, remove glasses, and keep face centered."
+            )
+        
+        print(f"  Quality scores: best={best_quality:.3f}, avg={avg_quality:.3f}, frames={len(scored)}")
         
         # Use top 5 highest quality frames for aggregation
         agg = self._aggregate_embeddings(emb_list, topk=min(5, len(emb_list)))
         if agg is None:
             raise Exception("Failed to aggregate embeddings")
         
-        # Add to FAISS index and save
+        # Track registration time
+        reg_start = time.time()
+        
+        # Add to FAISS index
         self.index.add(np.expand_dims(agg, axis=0))
         self.student_ids.append(student_id)
+        
+        # Store metadata
+        self.metadata[student_id] = {
+            'registration_date': datetime.now().isoformat(),
+            'quality_best': float(best_quality),
+            'quality_avg': float(avg_quality),
+            'frames_used': len(scored),
+            'frames_total': len(image_paths),
+            'model_version': 'buffalo_l',
+            'embedding_norm': float(np.linalg.norm(agg)),
+            'threshold_used': self.RECOGNITION_THRESHOLD
+        }
+        
+        # Save everything
         self.save_index()
         
+        reg_time = (time.time() - reg_start) * 1000
+        self.metrics['registration_times'].append(reg_time)
+        self.metrics['quality_scores'].append(avg_quality)
+        self.metrics['total_registrations'] += 1
+        
         print(f"✓ Registered student {student_id} with {len(scored)}/{len(image_paths)} valid frames")
+        print(f"  Registration time: {reg_time:.1f}ms")
         return True
 
-    def recognize_face(self, image_path: str, threshold: float = 0.35):
+    def recognize_face(self, image_path: str, threshold: float = 0.70):
         """Recognize a face and return the best match if over cosine threshold.
 
         Using inner product on normalized embeddings -> cosine similarity (higher is better).
-        Typical threshold 0.3-0.5 depending on environment. Default 0.35 is conservative.
+        Default threshold: 0.70 (70%) for high security and accuracy.
         """
         if self.index is None or self.index.ntotal == 0:
             return None
 
+        # Set HNSW search quality if using HNSW index
+        if self.use_hnsw and hasattr(self.index, 'hnsw'):
+            self.index.hnsw.efSearch = 32  # Higher = more accurate but slower
+        
+        search_start = time.time()
         embedding = self.extract_embedding(image_path)
         sims, indices = self.index.search(np.expand_dims(embedding, axis=0), k=1)
+        search_time = (time.time() - search_start) * 1000
 
         idx = int(indices[0][0]) if indices.size > 0 else -1
         sim = float(sims[0][0]) if sims.size > 0 else -1.0
+
+        # Track search performance
+        self.metrics['search_times'].append(search_time)
+        self.metrics['total_searches'] += 1
 
         if idx >= 0 and sim >= threshold:
             student_id = self.student_ids[idx]
@@ -209,7 +372,7 @@ class FaceRecognitionSystem:
 
         return None
 
-    def recognize_face_multi(self, image_paths: List[str], threshold: float = 0.35, min_votes_ratio: float = 0.6):
+    def recognize_face_multi(self, image_paths: List[str], threshold: float = None, min_votes_ratio: float = 0.6):
         """Recognize across multiple frames with robust voting mechanism.
 
         Strategy: 
@@ -221,7 +384,7 @@ class FaceRecognitionSystem:
 
         Args:
             image_paths: List of image paths to process
-            threshold: Minimum cosine similarity (0.7 = 70% for high security)
+            threshold: Minimum cosine similarity (default: 0.70 = 70% for high security)
             min_votes_ratio: Minimum ratio of frames that must agree (0.6 = 60%)
 
         Returns:
@@ -230,6 +393,16 @@ class FaceRecognitionSystem:
         """
         if self.index is None or self.index.ntotal == 0:
             return None
+        
+        # Use class threshold if not specified
+        if threshold is None:
+            threshold = self.RECOGNITION_THRESHOLD
+        
+        # Set HNSW search quality if using HNSW index
+        if self.use_hnsw and hasattr(self.index, 'hnsw'):
+            self.index.hnsw.efSearch = 32  # Higher = more accurate but slower
+        
+        multi_search_start = time.time()
         
         # Track votes and similarities for each student ID
         votes = {}  # {student_id: vote_count}
@@ -276,6 +449,11 @@ class FaceRecognitionSystem:
             avg_similarity = float(np.mean(sorted(winner_sims, reverse=True)[:min(3, len(winner_sims))]))
             confidence = max(0.0, min(1.0, (avg_similarity - threshold) / (1.0 - threshold)))
             
+            # Track performance
+            multi_search_time = (time.time() - multi_search_start) * 1000
+            self.metrics['search_times'].append(multi_search_time)
+            self.metrics['total_searches'] += 1
+            
             return {
                 "student_id": winner_id,
                 "confidence": confidence,
@@ -284,17 +462,40 @@ class FaceRecognitionSystem:
                 "frames": total_frames,
                 "valid_frames": valid_frames,
                 "votes": winner_votes,
-                "vote_ratio": vote_ratio
+                "vote_ratio": vote_ratio,
+                "search_time_ms": round(multi_search_time, 2)
             }
         
         # Not enough consensus
         return None
 
     def stats(self) -> dict:
+        """Get comprehensive statistics about the face recognition system."""
+        avg_search_time = np.mean(self.metrics['search_times'][-100:]) if self.metrics['search_times'] else 0
+        avg_reg_time = np.mean(self.metrics['registration_times'][-100:]) if self.metrics['registration_times'] else 0
+        avg_quality = np.mean(self.metrics['quality_scores'][-100:]) if self.metrics['quality_scores'] else 0
+        
         return {
             "index_path": self.index_dir,
             "dimension": self.dimension,
+            "index_type": "HNSW" if self.use_hnsw else "Flat",
             "ntotal": int(self.index.ntotal) if self.index is not None else 0,
+            "registered_students": len(self.student_ids),
+            "model": "InsightFace buffalo_l (ArcFace)",
+            "thresholds": {
+                "recognition": self.RECOGNITION_THRESHOLD,
+                "min_quality": self.MIN_QUALITY_THRESHOLD
+            },
+            "performance": {
+                "avg_search_time_ms": round(avg_search_time, 2),
+                "avg_registration_time_ms": round(avg_reg_time, 2),
+                "total_searches": self.metrics['total_searches'],
+                "total_registrations": self.metrics['total_registrations']
+            },
+            "quality": {
+                "avg_quality_score": round(avg_quality, 3),
+                "samples": len(self.metrics['quality_scores'])
+            },
             "registered_students": len(self.student_ids),
         }
 
