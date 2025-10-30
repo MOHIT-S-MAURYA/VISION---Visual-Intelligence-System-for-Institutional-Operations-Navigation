@@ -176,17 +176,18 @@ class StudentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def register_with_face(self, request):
-        """Register a new student with face capture"""
+        """Register a new student with face capture (roll_number is optional - auto-generated if not provided)"""
         try:
             # Extract student data
             student_data = {
-                'roll_number': request.data.get('roll_number'),
+                'roll_number': request.data.get('roll_number', ''),  # Optional now
                 'full_name': request.data.get('full_name'),
                 'department': request.data.get('department'),
                 'class_year': request.data.get('class_year'),
             }
-            # Basic validation
-            missing = [k for k, v in student_data.items() if not v]
+            # Basic validation - roll_number is now optional
+            required_fields = ['full_name', 'department', 'class_year']
+            missing = [k for k in required_fields if not student_data.get(k)]
             if missing:
                 return Response(
                     {'error': f"Missing required fields: {', '.join(missing)}"},
@@ -276,18 +277,19 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def register_with_face_multi(self, request):
-        """Register a new student using multiple frames for robust embedding."""
+        """Register a new student using multiple frames for robust embedding (roll_number is optional - auto-generated if not provided)."""
         try:
             # Extract student data
             student_data = {
-                'roll_number': request.data.get('roll_number'),
+                'roll_number': request.data.get('roll_number', ''),  # Optional now
                 'full_name': request.data.get('full_name'),
                 'department': request.data.get('department'),
                 'class_year': request.data.get('class_year'),
             }
             
-            # Validate required fields
-            missing = [k for k, v in student_data.items() if not v]
+            # Validate required fields - roll_number is now optional
+            required_fields = ['full_name', 'department', 'class_year']
+            missing = [k for k in required_fields if not student_data.get(k)]
             if missing:
                 return Response(
                     {'error': f"Missing required fields: {', '.join(missing)}"}, 

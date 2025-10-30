@@ -57,14 +57,21 @@ All primary keys are **automatically generated** by Django using `BigAutoField` 
    - Generation: Automatic on save
    - Used as: Primary key for individual attendance records
 
-### Secondary Identifiers (User-Provided)
+### Secondary Identifiers
 
-1. **Student.roll_number** - User input (required, unique)
+1. **Student.roll_number** - Auto-generated OR user input (optional, unique)
 
    - Type: `CharField(max_length=50)`
    - Constraints: Unique across all students
+   - Generation: Auto-generated if not provided
+   - Format (auto): `{DEPT_CODE}-{YEAR}-{SEQUENCE}`
+   - Example (auto): "CSE-2025-00001", "ECE-2025-00015"
+   - Example (manual): "CSE2024001" (any custom format)
    - Purpose: Human-readable student identifier
-   - Example: "CSE2024001"
+   - **How it works**:
+     - If user provides roll_number → Use as-is
+     - If left blank → Auto-generate: `{department.code}-2025-{sequence}`
+     - Sequence increments per department per year
 
 2. **Teacher.employee_id** - User input (optional, unique)
 
@@ -95,16 +102,18 @@ All primary keys are **automatically generated** by Django using `BigAutoField` 
 ### Data Flow Example
 
 ```python
-# Student Registration Flow:
-# 1. Frontend submits form with roll_number, name, department, frames
+# Student Registration Flow (with auto-generated roll number):
+# 1. Frontend submits form with empty roll_number, name, department, frames
 # 2. Django creates Student instance
 student = Student.objects.create(
-    roll_number="CSE2024001",  # User input
+    roll_number="",             # Empty - will auto-generate
     full_name="John Doe",       # User input
-    department=dept_obj,        # Foreign key
+    department=dept_obj,        # Foreign key (e.g., CSE department)
     class_year="First Year"     # User input
 )
-# student.id is now auto-generated (e.g., 42)
+# During save():
+#   - student.id is auto-generated (e.g., 42)
+#   - roll_number auto-generated: "CSE-2025-00001"
 
 # 3. Backend sends to AI service
 data = {'student_id': str(student.id)}  # "42"
@@ -116,6 +125,15 @@ self.index.add(embedding)
 # 5. Django updates with embedding_id
 student.face_embedding_id = "42"  # Same as student.id
 student.save()
+
+# Alternative: Manual roll number
+student = Student.objects.create(
+    roll_number="CUSTOM-2024-001",  # User provides custom format
+    full_name="Jane Smith",
+    department=dept_obj,
+    class_year="Second Year"
+)
+# roll_number remains "CUSTOM-2024-001" (user-provided value used)
 
 # Recognition Flow:
 # 1. AI service recognizes face → returns student_id: "42"

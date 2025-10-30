@@ -16,8 +16,9 @@ export default function Attendance() {
   const webcamRef = useRef(null);
   const intervalRef = useRef(null);
   const canvasRef = useRef(null);
-  const [intervalMs, setIntervalMs] = useState(800);
+  const [intervalMs, setIntervalMs] = useState(400); // Faster refresh: 400ms = 2.5 FPS
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const processingRef = useRef(false); // Prevent overlapping requests
 
   // Teacher's teaching options from backend
   const [teacherDepartments, setTeacherDepartments] = useState([]);
@@ -254,6 +255,9 @@ export default function Attendance() {
   }
 
   async function detectAndMarkFrame() {
+    // Skip if already processing (prevents request queuing)
+    if (processingRef.current) return;
+
     // Check if session is still active before marking
     if (!session || !session.is_active) {
       setRunning(false);
@@ -264,11 +268,14 @@ export default function Attendance() {
 
     const imageSrc = webcamRef.current?.getScreenshot();
     if (!imageSrc) return;
-    const formData = new FormData();
-    const blob = await (await fetch(imageSrc)).blob();
-    formData.append("frame", blob, "frame.jpg");
+
+    processingRef.current = true;
 
     try {
+      const formData = new FormData();
+      const blob = await (await fetch(imageSrc)).blob();
+      formData.append("frame", blob, "frame.jpg");
+
       const token = localStorage.getItem("teacher_token");
       const res = await fetch(
         `${API_URL}/api/attendance/sessions/${session.id}/recognize_frame/`,
@@ -278,6 +285,7 @@ export default function Attendance() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
       );
+
       if (!res.ok) {
         // Session might have been ended
         if (res.status === 400) {
@@ -287,62 +295,94 @@ export default function Attendance() {
         }
         return;
       }
+
       const data = await res.json();
       drawFaces(data);
+
       const faces = Array.isArray(data.faces) ? data.faces : [];
       const newly = faces
         .filter((f) => f.recognized && f.student)
         .map((f) => ({
           student: f.student,
           confidence: f.confidence || 0,
+          similarity: f.similarity || 0,
           ts: Date.now(),
         }));
+
       if (newly.length) {
         setRecognized((prev) => [...newly, ...prev].slice(0, 50));
       }
     } catch (err) {
-      // ignore transient errors
+      // Ignore transient errors but log them
+      console.error("Recognition error:", err);
+    } finally {
+      processingRef.current = false;
     }
   }
 
   function drawFaces(payload) {
-    try {
-      const canvas = canvasRef.current;
-      const video = webcamRef.current?.video;
-      if (!canvas || !video) return;
-      const ctx = canvas.getContext("2d");
-      const vw = video.videoWidth || 640;
-      const vh = video.videoHeight || 480;
-      canvas.width = vw;
-      canvas.height = vh;
-      ctx.clearRect(0, 0, vw, vh);
-      const imgW = payload?.image?.width || vw;
-      const imgH = payload?.image?.height || vh;
-      const sx = vw / imgW;
-      const sy = vh / imgH;
-      const faces = Array.isArray(payload?.faces) ? payload.faces : [];
-      faces.forEach((f) => {
-        const [x1, y1, x2, y2] = f.bbox || [0, 0, 0, 0];
-        const rx1 = Math.max(0, Math.round(x1 * sx));
-        const ry1 = Math.max(0, Math.round(y1 * sy));
-        const rw = Math.max(1, Math.round((x2 - x1) * sx));
-        const rh = Math.max(1, Math.round((y2 - y1) * sy));
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = f.recognized ? "#22c55e" : "#ef4444"; // green for recognized, red for unknown
-        ctx.strokeRect(rx1, ry1, rw, rh);
-        const label =
-          f.recognized && f.student ? `${f.student.full_name}` : "Unknown";
-        ctx.fillStyle = f.recognized
-          ? "rgba(34,197,94,0.85)"
-          : "rgba(239,68,68,0.85)";
-        ctx.font = "12px sans-serif";
-        const tw = ctx.measureText(label).width + 8;
-        const th = 16;
-        ctx.fillRect(rx1, Math.max(0, ry1 - th), tw, th);
-        ctx.fillStyle = "#fff";
-        ctx.fillText(label, rx1 + 4, Math.max(12, ry1 - 4));
-      });
-    } catch {}
+    // Use requestAnimationFrame for smoother rendering
+    requestAnimationFrame(() => {
+      try {
+        const canvas = canvasRef.current;
+        const video = webcamRef.current?.video;
+        if (!canvas || !video) return;
+
+        const ctx = canvas.getContext("2d");
+        const vw = video.videoWidth || 1280;
+        const vh = video.videoHeight || 720;
+
+        // Only resize canvas if dimensions changed
+        if (canvas.width !== vw || canvas.height !== vh) {
+          canvas.width = vw;
+          canvas.height = vh;
+        }
+
+        ctx.clearRect(0, 0, vw, vh);
+
+        const imgW = payload?.image?.width || vw;
+        const imgH = payload?.image?.height || vh;
+        const sx = vw / imgW;
+        const sy = vh / imgH;
+
+        const faces = Array.isArray(payload?.faces) ? payload.faces : [];
+
+        faces.forEach((f) => {
+          const [x1, y1, x2, y2] = f.bbox || [0, 0, 0, 0];
+          const rx1 = Math.max(0, Math.round(x1 * sx));
+          const ry1 = Math.max(0, Math.round(y1 * sy));
+          const rw = Math.max(1, Math.round((x2 - x1) * sx));
+          const rh = Math.max(1, Math.round((y2 - y1) * sy));
+
+          // Draw bounding box with thicker line for better visibility
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = f.recognized ? "#22c55e" : "#ef4444"; // green for recognized, red for unknown
+          ctx.strokeRect(rx1, ry1, rw, rh);
+
+          // Draw label with better styling
+          const label =
+            f.recognized && f.student ? `${f.student.full_name}` : "Unknown";
+          const similarity = f.similarity
+            ? ` (${Math.round(f.similarity * 100)}%)`
+            : "";
+          const fullLabel = label + similarity;
+
+          ctx.fillStyle = f.recognized
+            ? "rgba(34,197,94,0.9)"
+            : "rgba(239,68,68,0.9)";
+          ctx.font = "bold 14px sans-serif";
+
+          const tw = ctx.measureText(fullLabel).width + 12;
+          const th = 20;
+          ctx.fillRect(rx1, Math.max(0, ry1 - th - 2), tw, th);
+
+          ctx.fillStyle = "#fff";
+          ctx.fillText(fullLabel, rx1 + 6, Math.max(14, ry1 - 6));
+        });
+      } catch (err) {
+        console.error("Draw error:", err);
+      }
+    });
   }
 
   useEffect(() => () => clearInterval(intervalRef.current), []);
@@ -460,7 +500,13 @@ export default function Attendance() {
             ref={webcamRef}
             screenshotFormat="image/jpeg"
             className="rounded border"
-            videoConstraints={{ facingMode: "user" }}
+            videoConstraints={{
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+            }}
+            mirrored={true}
           />
           <canvas
             ref={canvasRef}
@@ -492,21 +538,24 @@ export default function Attendance() {
               </button>
             )}
             <label className="text-sm font-medium text-gray-700">
-              Scan Interval:
+              Scan Speed:
             </label>
             <input
               type="number"
-              min={300}
-              max={3000}
+              min={200}
+              max={2000}
               step={100}
               value={intervalMs}
-              onChange={(e) => setIntervalMs(parseInt(e.target.value) || 800)}
+              onChange={(e) => setIntervalMs(parseInt(e.target.value) || 400)}
               className="w-24 border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-              title="Time between face scans in milliseconds"
+              title="Time between scans (lower = faster response)"
             />
             <span className="text-xs text-gray-500">ms</span>
+            <span className="text-xs text-green-600 font-medium">
+              ({(1000 / intervalMs).toFixed(1)} FPS)
+            </span>
             <span className="text-xs text-gray-400">
-              (300-3000ms, faster = more frequent scans)
+              Recommended: 300-500ms for best performance
             </span>
           </div>
         </div>

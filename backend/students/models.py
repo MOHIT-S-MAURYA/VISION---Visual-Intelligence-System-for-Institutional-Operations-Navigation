@@ -78,7 +78,7 @@ class TeacherSubjectAssignment(models.Model):
 
 class Student(models.Model):
     """Student model"""
-    roll_number = models.CharField(max_length=50, unique=True)
+    roll_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
     full_name = models.CharField(max_length=200)
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name='students', null=True)
     class_year = models.CharField(max_length=50)
@@ -87,3 +87,34 @@ class Student(models.Model):
     face_embedding_id = models.CharField(max_length=100, null=True, blank=True)
     face_image = models.ImageField(upload_to='student_faces/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    
+    def save(self, *args, **kwargs):
+        """Auto-generate roll number if not provided"""
+        if not self.roll_number:
+            # Generate roll number format: DEPT-YEAR-XXXXX
+            # e.g., CSE-2024-00001
+            if self.department:
+                year = "2025"  # Current year, could be dynamic
+                dept_code = self.department.code
+                
+                # Get last student from same department to determine next number
+                last_student = Student.objects.filter(
+                    roll_number__startswith=f"{dept_code}-{year}-"
+                ).order_by('-roll_number').first()
+                
+                if last_student and last_student.roll_number:
+                    try:
+                        # Extract number from roll_number
+                        last_num = int(last_student.roll_number.split('-')[-1])
+                        next_num = last_num + 1
+                    except (ValueError, IndexError):
+                        next_num = 1
+                else:
+                    next_num = 1
+                
+                self.roll_number = f"{dept_code}-{year}-{next_num:05d}"
+            else:
+                # Fallback if no department: use just ID-based format
+                self.roll_number = f"STU-{year}-{self.id or 'TEMP'}"
+        
+        super().save(*args, **kwargs)

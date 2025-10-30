@@ -243,12 +243,11 @@ export default function Registration() {
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
-            label="Roll Number"
+            label="Roll Number (Optional)"
             value={rollNumber}
             onChange={setRollNumber}
-            placeholder="e.g., 2025CS001"
-            hint="Unique student identification number"
-            required
+            placeholder="e.g., 2025CS001 (auto-generated if empty)"
+            hint="Leave blank to auto-generate based on department"
           />
           <Input
             label="Full Name"
