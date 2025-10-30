@@ -49,7 +49,7 @@ sleep 2
 # Start Frontend
 echo "⚛️  Starting React Frontend on port 3000..."
 cd frontend
-npm run dev 2>&1 | sed 's/^/[FRONTEND] /' &
+PORT=3000 npm start 2>&1 | sed 's/^/[FRONTEND] /' &
 FRONTEND_PID=$!
 cd ..
 

@@ -5,7 +5,7 @@ import uvicorn
 import os
 import tempfile
 from typing import Optional
-from .face_recognition import FaceRecognitionSystem
+from face_recognition import FaceRecognitionSystem
 import cv2
 
 app = FastAPI(title="Face Recognition AI Service")
