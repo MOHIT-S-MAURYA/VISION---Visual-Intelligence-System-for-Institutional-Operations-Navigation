@@ -1,0 +1,80 @@
+
+======================================================================
+FACE RECOGNITION MODEL BENCHMARK REPORT
+======================================================================
+
+Test Date: 2025-10-30 23:06:16
+Test Images: 10 from 3 students
+Models Tested: 5
+
+----------------------------------------------------------------------
+MODEL RANKINGS (by Overall Score)
+----------------------------------------------------------------------
+
+1. MEDIAPIPE
+   Overall Score: 30.0/100
+   Detection: MediaPipe
+   Recognition: N/A (detection only)
+   Detection Accuracy: 0.0%
+   Detection Speed: 6.12ms
+   False Negatives: 10
+
+2. INSIGHTFACE_BUFFALO_SC
+   Overall Score: 25.68/100
+   Detection: SCRFD
+   Recognition: ArcFace (buffalo_sc)
+   Detection Accuracy: 0.0%
+   Detection Speed: 17.61ms
+   False Negatives: 10
+
+3. INSIGHTFACE_BUFFALO_L
+   Overall Score: 21.0/100
+   Detection: RetinaFace
+   Recognition: ArcFace (buffalo_l)
+   Detection Accuracy: 0.0%
+   Detection Speed: 99.70ms
+   False Negatives: 10
+
+4. DEEPFACE_ARCFACE
+   Overall Score: 20.0/100
+   Detection: RetinaFace
+   Recognition: ArcFace (DeepFace)
+   Detection Accuracy: 0.0%
+   Detection Speed: 0.00ms
+   False Negatives: 10
+
+5. DEEPFACE_FACENET
+   Overall Score: 20.0/100
+   Detection: RetinaFace
+   Recognition: FaceNet (DeepFace)
+   Detection Accuracy: 0.0%
+   Detection Speed: 0.00ms
+   False Negatives: 10
+
+----------------------------------------------------------------------
+DETAILED COMPARISON
+----------------------------------------------------------------------
+
+Model                     Det Acc    Speed      FN       Quality   
+----------------------------------------------------------------------
+mediapipe                 0.00       6.12       10       0.00      
+insightface_buffalo_sc    0.00       17.61      10       0.00      
+insightface_buffalo_l     0.00       99.70      10       0.00      
+deepface_arcface          0.00       0.00       10       0.00      
+deepface_facenet          0.00       0.00       10       0.00      
+
+----------------------------------------------------------------------
+RECOMMENDATIONS
+----------------------------------------------------------------------
+
+🏆 BEST OVERALL: mediapipe
+   Google MediaPipe face detection
+   Overall Score: 30.0/100
+
+⚡ FASTEST: deepface_arcface
+   Detection Speed: 0.00ms
+
+🎯 MOST ACCURATE: mediapipe
+   Detection Accuracy: 0.0%
+
+======================================================================
