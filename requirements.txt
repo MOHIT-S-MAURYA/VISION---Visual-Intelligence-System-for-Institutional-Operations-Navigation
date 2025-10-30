@@ -1,20 +1,23 @@
 # Combined requirements for the entire project
+# Use specific requirements in backend/ and ai_service/ folders for modular installation
 
 # Django Backend
 Django==4.2.7
 djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.3.1
 python-decouple==3.8
+requests==2.31.0
 
 # FastAPI AI Service
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
-# AI/ML Libraries
+# AI/ML Libraries (Production - SCRFD + ArcFace)
 opencv-python==4.8.1.78
-deepface==0.0.79
-tensorflow==2.15.0
+insightface==0.7.3
+onnxruntime==1.17.0
 faiss-cpu==1.7.4
 numpy==1.24.3
 
