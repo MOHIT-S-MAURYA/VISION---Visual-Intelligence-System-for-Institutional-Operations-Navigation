@@ -50,12 +50,22 @@ export default function Students() {
           localStorage.removeItem("teacher_refresh");
         }
       }
+
+      // Check if response is JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned non-JSON response (${res.status}). Please check backend logs.`
+        );
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load students");
       // Sort by roll number
       data.sort((a, b) => a.roll_number.localeCompare(b.roll_number));
       setStudents(data);
     } catch (e) {
+      console.error("Error loading students:", e);
       setError(e.message);
     } finally {
       setLoading(false);

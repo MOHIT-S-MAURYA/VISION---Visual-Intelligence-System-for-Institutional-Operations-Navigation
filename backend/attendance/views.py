@@ -62,19 +62,33 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
                 # Get the data being created
                 department = serializer.validated_data.get('department')
                 class_year = serializer.validated_data.get('class_year')
-                subject = serializer.validated_data.get('subject')
+                subject_name = serializer.validated_data.get('subject')
                 
                 # Check if teacher has assignment for this subject
+                # Match by department code, class year, and subject name
                 has_assignment = TeacherSubjectAssignment.objects.filter(
                     teacher=teacher,
                     subject__department__code=department,
                     subject__class_year=class_year,
-                    subject__subject_name=subject,
+                    subject__subject_name=subject_name,
                     is_active=True
                 ).exists()
                 
                 if not has_assignment:
-                    raise PermissionDenied("You are not assigned to teach this subject")
+                    # Debug: List what subjects teacher is assigned to
+                    assigned_subjects = TeacherSubjectAssignment.objects.filter(
+                        teacher=teacher,
+                        is_active=True
+                    ).select_related('subject__department').values_list(
+                        'subject__department__code',
+                        'subject__class_year',
+                        'subject__subject_name',
+                        flat=False
+                    )
+                    raise PermissionDenied(
+                        f"You are not assigned to teach '{subject_name}' for {department} - {class_year}. "
+                        f"Your assignments: {list(assigned_subjects)}"
+                    )
             except Teacher.DoesNotExist:
                 raise PermissionDenied("Teacher profile not found")
         
@@ -313,7 +327,7 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
                     student = None
                 if student:
                     # Use similarity (raw cosine score) not confidence (rescaled)
-                    # similarity >= 0.7 means 70%+ match
+                    # similarity >= 0.7 means 70%+ match (high accuracy threshold)
                     similarity = float(f.get('similarity') or 0.0)
                     rec, created = AttendanceRecord.objects.get_or_create(
                         session=session,

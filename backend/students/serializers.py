@@ -74,5 +74,4 @@ class StudentSerializer(serializers.ModelSerializer):
         model = Student
         fields = ['id', 'roll_number', 'full_name', 'department', 'department_code', 
                   'department_name', 'class_year', 'email', 'phone', 'face_embedding_id', 
-                  'face_image', 'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
+                  'face_image', 'is_active']

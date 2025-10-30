@@ -5,7 +5,9 @@ import { DEPARTMENTS, getYearOptions } from "../constants/departments";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export default function Attendance() {
-  const [department, setDepartment] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [departmentCode, setDepartmentCode] = useState("");
+  const [departmentName, setDepartmentName] = useState("");
   const [classYear, setClassYear] = useState("");
   const [subject, setSubject] = useState("");
   const [session, setSession] = useState(null);
@@ -16,58 +18,82 @@ export default function Attendance() {
   const canvasRef = useRef(null);
   const [intervalMs, setIntervalMs] = useState(800);
   const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [isDepartmentLocked, setIsDepartmentLocked] = useState(false);
 
-  // Fetch teacher's department on mount
+  // Teacher's teaching options from backend
+  const [teacherDepartments, setTeacherDepartments] = useState([]);
+  const [availableYears, setAvailableYears] = useState([]);
+  const [loading, setLoading] = useState(true); // Fetch teacher's teaching options (departments and years they teach)
   useEffect(() => {
-    const fetchTeacherInfo = async () => {
+    const fetchTeachingOptions = async () => {
       const token = localStorage.getItem("teacher_token");
-      if (!token) return;
-
-      try {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.teacher && data.teacher.department) {
-            setDepartment(data.teacher.department);
-            setIsDepartmentLocked(true);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching teacher info:", error);
-      }
-    };
-
-    fetchTeacherInfo();
-  }, []);
-
-  // Get available years based on selected department
-  const availableYears = department ? getYearOptions(department) : [];
-
-  // Fetch subjects from API when department or year changes
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      if (!department || !classYear) {
-        setAvailableSubjects([]);
+      if (!token) {
+        setLoading(false);
         return;
       }
 
       try {
         const response = await fetch(
-          `${API_URL}/api/subjects/?department=${encodeURIComponent(
-            department
-          )}&class_year=${encodeURIComponent(classYear)}`
+          `${API_URL}/api/teacher-assignments/my_teaching_options/`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setTeacherDepartments(data.departments || []);
+          console.log("Teacher's departments:", data.departments);
+        } else {
+          console.error("Failed to fetch teaching options");
+        }
+      } catch (error) {
+        console.error("Error fetching teaching options:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeachingOptions();
+  }, []);
+
+  // Update available years when department changes
+  useEffect(() => {
+    if (departmentId) {
+      const selectedDept = teacherDepartments.find(
+        (d) => d.id.toString() === departmentId
+      );
+      if (selectedDept) {
+        setAvailableYears(selectedDept.years || []);
+      }
+    } else {
+      setAvailableYears([]);
+    }
+  }, [departmentId, teacherDepartments]);
+
+  // Fetch subjects from API when department or year changes
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      if (!departmentId || !classYear) {
+        setAvailableSubjects([]);
+        return;
+      }
+
+      const token = localStorage.getItem("teacher_token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/subjects/?department=${departmentId}&class_year=${encodeURIComponent(
+            classYear
+          )}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
         );
         if (response.ok) {
           const data = await response.json();
-          const subjectOptions = data.map((s) => ({
-            value: s.subject_name,
-            label: s.subject_name,
-          }));
-          setAvailableSubjects(subjectOptions);
+          console.log("Available subjects:", data);
+          setAvailableSubjects(data);
         } else {
           console.error("Failed to fetch subjects");
           setAvailableSubjects([]);
@@ -79,13 +105,21 @@ export default function Attendance() {
     };
 
     fetchSubjects();
-  }, [department, classYear]);
+  }, [departmentId, classYear]);
 
   // Reset year and subject when department changes
   const handleDepartmentChange = (value) => {
-    setDepartment(value);
+    setDepartmentId(value);
+    const selectedDept = teacherDepartments.find(
+      (d) => d.id.toString() === value
+    );
+    if (selectedDept) {
+      setDepartmentCode(selectedDept.code);
+      setDepartmentName(selectedDept.name);
+    }
     setClassYear("");
     setSubject("");
+    setAvailableSubjects([]);
   };
 
   // Reset subject when year changes
@@ -97,7 +131,7 @@ export default function Attendance() {
   async function createSession(e) {
     e.preventDefault();
     // Frontend validation for required fields
-    if (!department.trim() || !classYear.trim() || !subject.trim()) {
+    if (!departmentCode || !classYear.trim() || !subject.trim()) {
       alert(
         "Please fill all required fields: Department, Class/Year, Subject."
       );
@@ -111,7 +145,11 @@ export default function Attendance() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ department, class_year: classYear, subject }),
+        body: JSON.stringify({
+          department: departmentCode,
+          class_year: classYear,
+          subject,
+        }),
       });
 
       if (!res.ok) {
@@ -317,42 +355,61 @@ export default function Attendance() {
         onSubmit={createSession}
         className="bg-white shadow rounded p-6 grid grid-cols-1 md:grid-cols-4 gap-4"
       >
-        <Select
-          label="Department"
-          value={department}
-          onChange={handleDepartmentChange}
-          options={DEPARTMENTS.map((d) => ({ value: d.value, label: d.label }))}
-          hint={
-            isDepartmentLocked
-              ? "🔒 Department is locked to your assigned department"
-              : "Select department or program"
-          }
-          disabled={isDepartmentLocked}
-          required
-        />
-        <Select
-          label="Class / Year"
-          value={classYear}
-          onChange={handleYearChange}
-          options={availableYears}
-          hint="Select student year"
-          disabled={!department}
-          required
-        />
-        <Select
-          label="Subject"
-          value={subject}
-          onChange={setSubject}
-          options={availableSubjects}
-          hint="Select subject for this session"
-          disabled={!department || !classYear}
-          required
-        />
-        <div className="flex items-end">
-          <button className="bg-blue-600 text-white px-4 py-2 rounded w-full">
-            Create Session
-          </button>
-        </div>
+        {loading ? (
+          <div className="col-span-4 text-center py-4 text-gray-500">
+            Loading your teaching assignments...
+          </div>
+        ) : teacherDepartments.length === 0 ? (
+          <div className="col-span-4 text-center py-4 text-red-600">
+            No teaching assignments found. Please contact admin.
+          </div>
+        ) : (
+          <>
+            <Select
+              label="Department"
+              value={departmentId}
+              onChange={handleDepartmentChange}
+              options={teacherDepartments.map((d) => ({
+                value: d.id.toString(),
+                label: `${d.code} - ${d.name}`,
+              }))}
+              hint="Select department you teach"
+              required
+            />
+            <Select
+              label="Class / Year"
+              value={classYear}
+              onChange={handleYearChange}
+              options={availableYears.map((year) => ({
+                value: year,
+                label: year,
+              }))}
+              hint="Select class year"
+              disabled={!departmentId}
+              required
+            />
+            <Select
+              label="Subject"
+              value={subject}
+              onChange={setSubject}
+              options={availableSubjects.map((s) => ({
+                value: s.subject_name,
+                label: `${s.subject_code} - ${s.subject_name}`,
+              }))}
+              hint="Select subject"
+              disabled={!departmentId || !classYear}
+              required
+            />
+            <div className="flex items-end">
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700 disabled:bg-gray-400"
+                disabled={loading || teacherDepartments.length === 0}
+              >
+                Create Session
+              </button>
+            </div>
+          </>
+        )}
       </form>
 
       {session && (

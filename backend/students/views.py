@@ -82,12 +82,61 @@ class TeacherSubjectAssignmentViewSet(viewsets.ModelViewSet):
             try:
                 teacher = Teacher.objects.get(user=self.request.user)
                 if not self.request.user.is_superuser:
-                    queryset = queryset.filter(teacher=teacher)
+                    queryset = queryset.filter(teacher=teacher, is_active=True)
             except Teacher.DoesNotExist:
                 if not self.request.user.is_superuser:
                     queryset = queryset.none()
         
-        return queryset.select_related('teacher', 'subject')
+        return queryset.select_related('teacher', 'subject', 'subject__department')
+    
+    @action(detail=False, methods=['get'])
+    def my_teaching_options(self, request):
+        """Get unique departments and class years for the logged-in teacher"""
+        try:
+            teacher = Teacher.objects.get(user=request.user)
+            
+            # Get all active assignments for this teacher
+            assignments = TeacherSubjectAssignment.objects.filter(
+                teacher=teacher,
+                is_active=True
+            ).select_related('subject__department')
+            
+            # Extract unique department-year combinations
+            dept_year_map = {}
+            for assignment in assignments:
+                dept = assignment.subject.department
+                year = assignment.subject.class_year
+                
+                if dept.id not in dept_year_map:
+                    dept_year_map[dept.id] = {
+                        'id': dept.id,
+                        'code': dept.code,
+                        'name': dept.name,
+                        'years': set()
+                    }
+                dept_year_map[dept.id]['years'].add(year)
+            
+            # Convert to list format
+            departments = []
+            for dept_data in dept_year_map.values():
+                departments.append({
+                    'id': dept_data['id'],
+                    'code': dept_data['code'],
+                    'name': dept_data['name'],
+                    'years': sorted(list(dept_data['years']))
+                })
+            
+            return Response({
+                'departments': departments,
+                'teacher_id': teacher.id,
+                'teacher_name': teacher.full_name
+            })
+            
+        except Teacher.DoesNotExist:
+            return Response(
+                {'error': 'Teacher profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class StudentViewSet(viewsets.ModelViewSet):
@@ -108,7 +157,7 @@ class StudentViewSet(viewsets.ModelViewSet):
                     assignments = TeacherSubjectAssignment.objects.filter(
                         teacher=teacher,
                         is_active=True
-                    ).values_list('department', 'class_year').distinct()
+                    ).values_list('subject__department', 'subject__class_year').distinct()
                     
                     if not assignments:
                         return queryset.none()
