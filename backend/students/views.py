@@ -143,6 +143,13 @@ class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """Allow registration without authentication"""
+        if self.action in ['register_with_face', 'register_with_face_multi']:
+            return [AllowAny()]
+        return super().get_permissions()
     
     def get_queryset(self):
         """Filter students by teacher's assigned classes"""
