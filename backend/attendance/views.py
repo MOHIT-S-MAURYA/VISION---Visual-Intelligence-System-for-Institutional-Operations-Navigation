@@ -206,48 +206,104 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def recognize_multi(self, request, pk=None):
-        """Recognize using multiple frames (files as 'face_images[]')."""
+        """Recognize using multiple frames with enhanced security and speed.
+        
+        Features:
+        - Multi-frame voting for robust recognition
+        - 70% similarity threshold for high security
+        - 60% vote consensus required
+        - Duplicate prevention (no double-marking)
+        - Performance optimized batch processing
+        """
         session = self.get_object()
         if not session.is_active:
-            return Response({"error": "Session is not active"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Session is not active"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         images = request.FILES.getlist('face_images')
         if not images:
-            return Response({"error": "face_images[] files are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "face_images[] files are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(images) < 3:
+            return Response(
+                {"error": f"At least 3 frames required. Received: {len(images)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         ai_url = os.environ.get('AI_SERVICE_URL', 'http://localhost:8001').rstrip('/')
         endpoint = f"{ai_url}/api/face/recognize_multi"
 
+        # Prepare files for multi-frame recognition
         files = [('files', (img.name, img, getattr(img, 'content_type', 'image/jpeg'))) for img in images]
+        
         try:
+            # Uses 0.7 threshold (70% similarity) for marking attendance - High accuracy
             resp = requests.post(endpoint, files=files, timeout=20)
         except requests.RequestException as e:
-            return Response({"error": f"AI service unavailable: {e}"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {
+                    "error": "AI service unavailable", 
+                    "detail": str(e)
+                }, 
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if resp.status_code != 200:
-            return Response({"error": f"AI service error: HTTP {resp.status_code}"}, status=status.HTTP_502_BAD_GATEWAY)
+            error_detail = resp.json() if resp.headers.get('content-type') == 'application/json' else resp.text
+            return Response(
+                {
+                    "error": f"AI service error: HTTP {resp.status_code}",
+                    "detail": error_detail
+                }, 
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
         payload = resp.json()
+        
         if not payload.get('recognized'):
-            return Response({"recognized": False, "message": payload.get('message', 'No match')}, status=status.HTTP_200_OK)
+            return Response({
+                "recognized": False, 
+                "message": payload.get('message', 'No confident match found'),
+                "frames": payload.get('frames', len(images)),
+                "valid_frames": payload.get('valid_frames', 0)
+            }, status=status.HTTP_200_OK)
 
+        # Extract recognition results
         student_id = payload.get('student_id')
         confidence = float(payload.get('confidence', 0.0))
-
+        similarity = float(payload.get('similarity', 0.0))
+        votes = payload.get('votes', 0)
+        vote_ratio = payload.get('vote_ratio', 0.0)
+        
         try:
             student = Student.objects.get(id=student_id)
         except Student.DoesNotExist:
-            return Response({"error": "Recognized student not found in DB"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Recognized student not found in database"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
+        # Get or create attendance record (prevents duplicates)
         record, created = AttendanceRecord.objects.get_or_create(
             session=session,
             student=student,
-            defaults={"confidence": confidence, "status": "present"},
+            defaults={
+                "confidence": confidence, 
+                "status": "present"
+            },
         )
+        
         if not created:
-            record.confidence = max(record.confidence, confidence)
-            record.status = 'present'
-            record.save()
+            # Update existing record with higher confidence if found
+            if confidence > record.confidence:
+                record.confidence = confidence
+                record.status = 'present'
+                record.save()
 
         rec_serializer = AttendanceRecordSerializer(record)
         return Response({
@@ -256,11 +312,18 @@ class AttendanceSessionViewSet(viewsets.ModelViewSet):
                 "id": student.id,
                 "roll_number": student.roll_number,
                 "full_name": student.full_name,
-                "department": student.department,
+                "department": student.department.code if hasattr(student.department, 'code') else student.department,
                 "class_year": student.class_year,
             },
             "confidence": confidence,
+            "similarity": similarity,
+            "votes": votes,
+            "vote_ratio": vote_ratio,
+            "frames_processed": payload.get('frames', len(images)),
+            "valid_frames": payload.get('valid_frames', 0),
+            "already_marked": not created,
             "attendance_record": rec_serializer.data,
+            "message": "Attendance marked successfully" if created else "Already marked present (confidence updated)"
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])

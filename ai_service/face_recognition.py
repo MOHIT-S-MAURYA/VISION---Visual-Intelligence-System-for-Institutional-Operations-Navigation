@@ -134,26 +134,56 @@ class FaceRecognitionSystem:
         return True
 
     def register_face_multi(self, image_paths: List[str], student_id: str) -> bool:
-        """Register using multiple frames: quality filter + aggregate embeddings."""
+        """Register using multiple frames: quality filter + aggregate embeddings.
+        
+        Args:
+            image_paths: List of paths to face images
+            student_id: Unique identifier for the student
+            
+        Returns:
+            True if registration successful
+            
+        Raises:
+            Exception: If no valid faces found or aggregation fails
+        """
         scored: List[Tuple[float, np.ndarray]] = []
-        for p in image_paths:
+        errors = []
+        
+        for idx, p in enumerate(image_paths):
             try:
                 emb = self.extract_embedding(p)
                 q = self._image_quality_score(p)
                 scored.append((q, emb))
-            except Exception:
+            except Exception as e:
+                errors.append(f"Frame {idx}: {str(e)}")
                 continue
+        
         if not scored:
-            raise Exception("No valid faces found in frames")
-        # sort by quality desc and aggregate top frames
+            error_detail = "; ".join(errors) if errors else "Unknown error"
+            raise Exception(f"No valid faces found in {len(image_paths)} frames. Details: {error_detail}")
+        
+        # Require at least 3 valid faces for robust registration
+        if len(scored) < min(3, len(image_paths)):
+            raise Exception(
+                f"Only {len(scored)} valid faces found out of {len(image_paths)} frames. "
+                f"Need at least 3 clear face images for reliable registration."
+            )
+        
+        # Sort by quality desc and aggregate top frames
         scored.sort(key=lambda x: x[0], reverse=True)
         emb_list = [e for _, e in scored]
+        
+        # Use top 5 highest quality frames for aggregation
         agg = self._aggregate_embeddings(emb_list, topk=min(5, len(emb_list)))
         if agg is None:
             raise Exception("Failed to aggregate embeddings")
+        
+        # Add to FAISS index and save
         self.index.add(np.expand_dims(agg, axis=0))
         self.student_ids.append(student_id)
         self.save_index()
+        
+        print(f"✓ Registered student {student_id} with {len(scored)}/{len(image_paths)} valid frames")
         return True
 
     def recognize_face(self, image_path: str, threshold: float = 0.35):
@@ -179,39 +209,85 @@ class FaceRecognitionSystem:
 
         return None
 
-    def recognize_face_multi(self, image_paths: List[str], threshold: float = 0.35):
-        """Recognize across multiple frames; aggregate votes and confidence.
+    def recognize_face_multi(self, image_paths: List[str], threshold: float = 0.35, min_votes_ratio: float = 0.6):
+        """Recognize across multiple frames with robust voting mechanism.
 
-        Strategy: for each frame, compute cosine similarity to nearest neighbor; keep best.
-        Accept if majority votes for same ID and best similarity >= threshold.
+        Strategy: 
+        - Extract embeddings from all frames
+        - Search FAISS for nearest neighbor per frame
+        - Aggregate votes: only count frames where similarity >= threshold
+        - Require super-majority (60%+) of valid frames to agree on same ID
+        - Return highest confidence match if voting threshold met
+
+        Args:
+            image_paths: List of image paths to process
+            threshold: Minimum cosine similarity (0.7 = 70% for high security)
+            min_votes_ratio: Minimum ratio of frames that must agree (0.6 = 60%)
+
+        Returns:
+            Dict with student_id, confidence, similarity, frames, votes
+            None if no confident match found
         """
         if self.index is None or self.index.ntotal == 0:
             return None
-        votes = {}
-        best = {"student_id": None, "similarity": -1.0}
+        
+        # Track votes and similarities for each student ID
+        votes = {}  # {student_id: vote_count}
+        similarities = {}  # {student_id: [similarities]}
+        valid_frames = 0
         total_frames = 0
-        for p in image_paths:
+        
+        for idx, p in enumerate(image_paths):
             try:
                 emb = self.extract_embedding(p)
-            except Exception:
+            except Exception as e:
+                # Skip frames with no face detected
                 continue
+            
             total_frames += 1
+            
+            # Search FAISS index for nearest match
             sims, indices = self.index.search(np.expand_dims(emb, axis=0), k=1)
-            idx = int(indices[0][0]) if indices.size > 0 else -1
-            sim = float(sims[0][0]) if sims.size > 0 else -1.0
-            if idx >= 0:
-                sid = self.student_ids[idx]
-                votes[sid] = votes.get(sid, 0) + (1 if sim >= threshold else 0)
-                if sim > best["similarity"]:
-                    best = {"student_id": sid, "similarity": sim}
+            match_idx = int(indices[0][0]) if indices.size > 0 else -1
+            similarity = float(sims[0][0]) if sims.size > 0 else -1.0
+            
+            if match_idx >= 0 and similarity >= threshold:
+                sid = self.student_ids[match_idx]
+                votes[sid] = votes.get(sid, 0) + 1
+                if sid not in similarities:
+                    similarities[sid] = []
+                similarities[sid].append(similarity)
+                valid_frames += 1
 
-        if total_frames == 0 or best["student_id"] is None:
+        # No valid matches found
+        if valid_frames == 0 or not votes:
             return None
 
-        winner = max(votes.items(), key=lambda kv: kv[1])[0] if votes else best["student_id"]
-        if best["similarity"] >= threshold and votes.get(winner, 0) >= max(1, total_frames // 3):
-            confidence = max(0.0, min(1.0, (best["similarity"] - threshold) / (1.0 - threshold)))
-            return {"student_id": winner, "confidence": confidence, "similarity": best["similarity"], "frames": total_frames, "votes": votes.get(winner, 0)}
+        # Find student with most votes
+        winner_id = max(votes.items(), key=lambda kv: kv[1])[0]
+        winner_votes = votes[winner_id]
+        winner_sims = similarities[winner_id]
+        
+        # Security check: require super-majority of valid frames
+        vote_ratio = winner_votes / valid_frames if valid_frames > 0 else 0
+        
+        if vote_ratio >= min_votes_ratio:
+            # Use average of top similarities for robust confidence
+            avg_similarity = float(np.mean(sorted(winner_sims, reverse=True)[:min(3, len(winner_sims))]))
+            confidence = max(0.0, min(1.0, (avg_similarity - threshold) / (1.0 - threshold)))
+            
+            return {
+                "student_id": winner_id,
+                "confidence": confidence,
+                "similarity": avg_similarity,
+                "max_similarity": float(max(winner_sims)),
+                "frames": total_frames,
+                "valid_frames": valid_frames,
+                "votes": winner_votes,
+                "vote_ratio": vote_ratio
+            }
+        
+        # Not enough consensus
         return None
 
     def stats(self) -> dict:
@@ -225,8 +301,24 @@ class FaceRecognitionSystem:
     # -------- Multi-face recognition on a single image --------
     def recognize_faces_in_image(self, image_path: str, threshold: float = 0.35):
         """Detect multiple faces in a single image and recognize each independently.
-
-        Returns dict: { image: {width, height}, faces: [{bbox:[x1,y1,x2,y2], recognized:bool, student_id:str|None, similarity:float|None, confidence:float|None}] }
+        
+        Optimized for speed:
+        - Single face detection pass
+        - Batch FAISS search for all faces
+        - Returns bounding boxes and recognition results
+        
+        Returns dict: 
+        { 
+            image: {width, height}, 
+            faces: [{
+                bbox:[x1,y1,x2,y2], 
+                recognized:bool, 
+                student_id:str|None, 
+                similarity:float|None, 
+                confidence:float|None,
+                det_score:float
+            }] 
+        }
         """
         img = cv2.imread(image_path)
         if img is None:
@@ -235,43 +327,92 @@ class FaceRecognitionSystem:
         h, w = img.shape[:2]
         faces = self.face_app.get(img) or []
 
+        if not faces:
+            return {"image": {"width": w, "height": h}, "faces": []}
+
         results = []
+        
+        # Batch process all embeddings for speed
+        embeddings = []
+        face_data = []
+        
         for f in faces:
             bbox = getattr(f, 'bbox', None)
             emb = getattr(f, 'normed_embedding', None)
+            det_score = getattr(f, 'det_score', 0.0)
             rect = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])] if bbox is not None else [0, 0, 0, 0]
+            
+            face_data.append({
+                "bbox": rect,
+                "det_score": float(det_score)
+            })
+            
+            if emb is not None:
+                embeddings.append(_l2_normalize(emb.astype("float32")))
+            else:
+                embeddings.append(None)
 
-            if self.index is None or self.index.ntotal == 0 or emb is None:
+        # Batch FAISS search for all valid embeddings (fast!)
+        if self.index is not None and self.index.ntotal > 0:
+            valid_embs = [e for e in embeddings if e is not None]
+            if valid_embs:
+                # Single batch search for all faces - much faster than individual searches
+                emb_array = np.stack(valid_embs, axis=0)
+                sims, indices = self.index.search(emb_array, k=1)
+                
+                valid_idx = 0
+                for i, emb in enumerate(embeddings):
+                    if emb is None:
+                        # No embedding extracted for this face
+                        results.append({
+                            **face_data[i],
+                            "recognized": False,
+                            "student_id": None,
+                            "similarity": None,
+                            "confidence": None,
+                        })
+                    else:
+                        # Use pre-computed batch search result
+                        match_idx = int(indices[valid_idx][0])
+                        similarity = float(sims[valid_idx][0])
+                        valid_idx += 1
+                        
+                        if match_idx >= 0 and similarity >= threshold:
+                            sid = self.student_ids[match_idx]
+                            conf = max(0.0, min(1.0, (similarity - threshold) / (1.0 - threshold)))
+                            results.append({
+                                **face_data[i],
+                                "recognized": True,
+                                "student_id": sid,
+                                "similarity": similarity,
+                                "confidence": conf,
+                            })
+                        else:
+                            results.append({
+                                **face_data[i],
+                                "recognized": False,
+                                "student_id": None,
+                                "similarity": similarity if match_idx >= 0 else None,
+                                "confidence": None,
+                            })
+            else:
+                # No valid embeddings extracted
+                for i in range(len(face_data)):
+                    results.append({
+                        **face_data[i],
+                        "recognized": False,
+                        "student_id": None,
+                        "similarity": None,
+                        "confidence": None,
+                    })
+        else:
+            # No index or empty index
+            for i in range(len(face_data)):
                 results.append({
-                    "bbox": rect,
+                    **face_data[i],
                     "recognized": False,
                     "student_id": None,
                     "similarity": None,
-                    "confidence": None,
-                })
-                continue
-
-            emb = emb.astype("float32")
-            emb = _l2_normalize(emb)
-            sims, idxs = self.index.search(np.expand_dims(emb, 0), k=1)
-            idx = int(idxs[0][0]) if idxs.size > 0 else -1
-            sim = float(sims[0][0]) if sims.size > 0 else -1.0
-            if idx >= 0 and sim >= threshold:
-                sid = self.student_ids[idx]
-                conf = max(0.0, min(1.0, (sim - threshold) / (1.0 - threshold)))
-                results.append({
-                    "bbox": rect,
-                    "recognized": True,
-                    "student_id": sid,
-                    "similarity": sim,
-                    "confidence": conf,
-                })
-            else:
-                results.append({
-                    "bbox": rect,
-                    "recognized": False,
-                    "student_id": None,
-                    "similarity": sim if idx >= 0 else None,
                     "confidence": None,
                 })
 

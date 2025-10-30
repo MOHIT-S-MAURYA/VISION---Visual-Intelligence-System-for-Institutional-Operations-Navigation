@@ -103,29 +103,71 @@ async def register_face_multi(
     files: List[UploadFile] = File(...),
     student_id: str = Form(...)
 ):
-    """Register a new student's face from multiple frames."""
+    """Register a new student's face from multiple frames with quality validation."""
     temp_paths = []
     try:
-        for f in files:
+        # Validate minimum frames
+        if len(files) < 3:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"At least 3 frames required for robust registration. Received: {len(files)}"
+            )
+        
+        if len(files) > 15:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Maximum 15 frames allowed. Received: {len(files)}"
+            )
+        
+        # Save uploaded frames to temporary files
+        for idx, f in enumerate(files):
+            content = await f.read()
+            if len(content) == 0:
+                raise HTTPException(status_code=400, detail=f"Frame {idx} is empty")
+            
             with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tf:
-                tf.write(await f.read())
+                tf.write(content)
                 temp_paths.append(tf.name)
+        
+        # Register face with multi-frame aggregation
         success = face_system.register_face_multi(temp_paths, student_id)
+        
         if success:
             return {
                 "status": "success",
-                "message": "Face registered (multi-frame)",
+                "message": f"Face registered successfully using {len(temp_paths)} frames",
                 "embedding_id": student_id,
                 "student_id": student_id,
                 "frames": len(temp_paths),
+                "method": "multi-frame-aggregation"
             }
-        raise HTTPException(status_code=400, detail="Face registration failed")
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Face registration failed. No valid faces detected in provided frames."
+            )
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing faces: {str(e)}")
+        error_msg = str(e)
+        if "No face detected" in error_msg or "No valid faces" in error_msg:
+            raise HTTPException(
+                status_code=400, 
+                detail="No clear face detected in images. Please ensure face is well-lit and clearly visible."
+            )
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Face processing error: {error_msg}"
+        )
     finally:
+        # Clean up temporary files
         for p in temp_paths:
             if os.path.exists(p):
-                os.unlink(p)
+                try:
+                    os.unlink(p)
+                except Exception:
+                    pass
 
 @app.post("/api/face/recognize_multi")
 async def recognize_face_multi(files: List[UploadFile] = File(...)):
@@ -170,14 +212,14 @@ async def get_stats():
 async def recognize_frame(file: UploadFile = File(...)):
     """Detect multiple faces in a single frame and recognize each if possible.
     
-    Uses 0.7 threshold (70% similarity) for marking attendance.
+    Uses 0.7 threshold (70% similarity) for marking attendance - High accuracy.
     """
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tf:
             tf.write(await file.read())
             path = tf.name
         try:
-            # Use 0.7 threshold = 70% similarity minimum for attendance marking
+            # Use 0.7 threshold = 70% similarity minimum for high accuracy attendance marking
             result = face_system.recognize_faces_in_image(path, threshold=0.7)
             return result
         finally:

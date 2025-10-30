@@ -285,51 +285,109 @@ class StudentViewSet(viewsets.ModelViewSet):
                 'department': request.data.get('department'),
                 'class_year': request.data.get('class_year'),
             }
+            
+            # Validate required fields
             missing = [k for k, v in student_data.items() if not v]
             if missing:
-                return Response({'error': f"Missing required fields: {', '.join(missing)}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'error': f"Missing required fields: {', '.join(missing)}"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
+            # Get face images
             images = request.FILES.getlist('face_images')
-            if not images:
-                return Response({'error': 'At least one face image is required (face_images[])'}, status=status.HTTP_400_BAD_REQUEST)
+            if not images or len(images) < 3:
+                return Response(
+                    {'error': f'At least 3 face images required for robust registration. Received: {len(images)}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if len(images) > 15:
+                return Response(
+                    {'error': 'Maximum 15 images allowed'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
+            # Validate serializer
             serializer = self.get_serializer(data=student_data)
             try:
                 serializer.is_valid(raise_exception=True)
-            except Exception:
+            except Exception as e:
                 if 'roll_number' in serializer.errors:
-                    return Response({'error': 'Roll number already exists'}, status=status.HTTP_400_BAD_REQUEST)
-                raise
+                    return Response(
+                        {'error': 'Roll number already exists'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                return Response(
+                    {'error': str(e)}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create student record
             student = serializer.save()
 
-            # Save first image as reference
-            ref = images[0]
-            student.face_image.save(f"{student.roll_number}_face.jpg", ref, save=True)
+            # Save best quality image as reference
+            best_image = images[len(images) // 2]  # Pick middle frame as reference
+            student.face_image.save(f"{student.roll_number}_face.jpg", best_image, save=True)
 
-            # Send frames to AI service
+            # Send frames to AI service for FAISS registration
             base_ai = os.environ.get('AI_SERVICE_URL', 'http://localhost:8001').rstrip('/')
             ai_service_url = f"{base_ai}/api/face/register_multi"
-            files = [('files', (img.name, img, getattr(img, 'content_type', 'image/jpeg'))) for img in images]
+            
+            # Prepare files for upload (reset file pointers)
+            files = []
+            for idx, img in enumerate(images):
+                img.seek(0)
+                files.append(('files', (f'frame_{idx}.jpg', img, getattr(img, 'content_type', 'image/jpeg'))))
+            
             data = {'student_id': str(student.id)}
+            
             try:
                 resp = requests.post(ai_service_url, files=files, data=data, timeout=30)
+                
                 if resp.status_code == 200:
                     ai_response = resp.json()
                     student.face_embedding_id = ai_response.get('embedding_id', str(student.id))
                     student.save()
+                    
+                    return Response(
+                        {
+                            'status': 'success', 
+                            'message': f'Student registered successfully with {len(images)} frames',
+                            'student': StudentSerializer(student).data,
+                            'frames_processed': ai_response.get('frames', len(images)),
+                            'embedding_id': student.face_embedding_id
+                        },
+                        status=status.HTTP_201_CREATED
+                    )
                 else:
-                    student.face_embedding_id = f"pending_{student.id}"
-                    student.save()
-            except requests.RequestException:
-                student.face_embedding_id = f"pending_{student.id}"
-                student.save()
+                    # AI service returned error
+                    error_detail = resp.json() if resp.headers.get('content-type') == 'application/json' else resp.text
+                    student.delete()  # Rollback student creation
+                    return Response(
+                        {
+                            'error': f'Face registration failed: {error_detail}',
+                            'detail': 'AI service could not process face images. Please ensure face is clearly visible.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+            except requests.RequestException as e:
+                # AI service not reachable
+                student.delete()  # Rollback student creation
+                return Response(
+                    {
+                        'error': 'AI service unavailable',
+                        'detail': f'Could not connect to face recognition service: {str(e)}'
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
 
-            return Response(
-                {'status': 'success', 'message': 'Student registered successfully (multi-frame)', 'student': StudentSerializer(student).data},
-                status=status.HTTP_201_CREATED
-            )
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': f'Registration failed: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     @action(detail=False, methods=['get'])
     def by_class(self, request):

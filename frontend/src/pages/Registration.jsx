@@ -105,42 +105,84 @@ export default function Registration() {
   };
 
   const capture = async () => {
-    // capture N frames over ~1s window
-    const N = Math.max(3, Math.min(10, frameCount));
+    setMessage({
+      type: "info",
+      text: "Capturing multiple frames for robust registration...",
+    });
+
+    // Capture N frames over ~1-2s window for quality
+    const N = Math.max(5, Math.min(10, frameCount));
     const captured = [];
-    for (let i = 0; i < N; i++) {
-      const imageSrc = webcamRef.current.getScreenshot({
-        width: 480,
-        height: 360,
+
+    try {
+      for (let i = 0; i < N; i++) {
+        const imageSrc = webcamRef.current.getScreenshot({
+          width: 640,
+          height: 480,
+        });
+        if (imageSrc) captured.push(imageSrc);
+        // 150ms interval = ~1.5s total for 10 frames
+        await new Promise((r) => setTimeout(r, 150));
+      }
+
+      if (captured.length < 5) {
+        setMessage({
+          type: "error",
+          text: `Only captured ${captured.length} frames. Please try again with better lighting.`,
+        });
+        return;
+      }
+
+      setCaptured(captured[captured.length - 1] || null);
+      setFrames(captured);
+      setMessage({
+        type: "success",
+        text: `✓ Captured ${captured.length} frames successfully. Ready to register!`,
       });
-      if (imageSrc) captured.push(imageSrc);
-      await new Promise((r) => setTimeout(r, 120));
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: "Failed to capture frames. Please try again.",
+      });
     }
-    setCaptured(captured[captured.length - 1] || null);
-    setFrames(captured);
   };
 
-  const retake = () => setCaptured(null);
+  const retake = () => {
+    setCaptured(null);
+    setFrames([]);
+    setMessage(null);
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
+
+    // Validation
     if (!captured || frames.length === 0) {
-      setMessage({ type: "error", text: "Please capture a face image." });
+      setMessage({ type: "error", text: "Please capture face images first." });
+      return;
+    }
+
+    if (frames.length < 5) {
+      setMessage({
+        type: "error",
+        text: `Only ${frames.length} frames captured. Need at least 5 for reliable registration.`,
+      });
       return;
     }
 
     setLoading(true);
-    setMessage(null);
+    setMessage({ type: "info", text: `Processing ${frames.length} frames...` });
 
     try {
       const formData = new FormData();
       formData.append("roll_number", rollNumber);
       formData.append("full_name", fullName);
-      formData.append("department", department); // Now sends department ID (number)
+      formData.append("department", department); // Sends department ID (number)
       formData.append("class_year", classYear);
       if (email) formData.append("email", email);
       if (phone) formData.append("phone", phone);
-      // attach multiple frames
+
+      // Attach multiple frames
       for (let i = 0; i < frames.length; i++) {
         const res = await fetch(frames[i]);
         const blob = await res.blob();
@@ -158,16 +200,34 @@ export default function Registration() {
       );
       const data = await resp.json();
 
-      if (!resp.ok) throw new Error(data.error || "Registration failed");
-      setMessage({ type: "success", text: "Student registered successfully!" });
+      if (!resp.ok) {
+        const errorMsg = data.error || data.detail || "Registration failed";
+        throw new Error(errorMsg);
+      }
+
+      // Success
+      setMessage({
+        type: "success",
+        text: `✓ ${
+          data.message || "Student registered successfully!"
+        } (Frames: ${data.frames_processed || frames.length})`,
+      });
+
+      // Reset form
       setRollNumber("");
       setFullName("");
+      setEmail("");
+      setPhone("");
       setDepartment("");
       setClassYear("");
       setCaptured(null);
       setFrames([]);
+      setSelectedDepartmentObj(null);
     } catch (err) {
-      setMessage({ type: "error", text: err.message });
+      setMessage({
+        type: "error",
+        text: `Registration failed: ${err.message}`,
+      });
     } finally {
       setLoading(false);
     }
@@ -245,42 +305,64 @@ export default function Registration() {
         </div>
 
         <div className="pt-4 border-t">
-          <h3 className="font-semibold mb-2">Face Capture</h3>
-          <p className="text-sm text-gray-600 mb-3">
-            Position your face in the camera and click capture. Multiple frames
-            will be captured for better accuracy.
-          </p>
+          <h3 className="font-semibold mb-2 flex items-center gap-2">
+            📸 Face Capture
+            {frames.length > 0 && (
+              <span className="text-sm font-normal text-green-600">
+                ({frames.length} frames captured)
+              </span>
+            )}
+          </h3>
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+            <p className="text-sm text-blue-800">
+              <strong>Instructions for best results:</strong>
+            </p>
+            <ul className="text-xs text-blue-700 mt-1 ml-4 list-disc space-y-1">
+              <li>Ensure good lighting on your face</li>
+              <li>Keep your face centered in the frame</li>
+              <li>Remove glasses or hats if possible</li>
+              <li>Look directly at the camera</li>
+              <li>
+                Multiple frames will be captured automatically (1-2 seconds)
+              </li>
+            </ul>
+          </div>
           {!captured ? (
             <div className="space-y-3">
               <Webcam
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: "user" }}
-                className="rounded border"
+                videoConstraints={{
+                  facingMode: "user",
+                  width: 640,
+                  height: 480,
+                }}
+                className="rounded border w-full"
+                style={{ maxWidth: "640px" }}
               />
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700">
-                  Frames to capture:
+                  Number of frames:
                 </label>
                 <input
                   type="number"
-                  min={3}
+                  min={5}
                   max={10}
                   value={frameCount}
-                  onChange={(e) => setFrameCount(parseInt(e.target.value) || 5)}
+                  onChange={(e) => setFrameCount(parseInt(e.target.value) || 7)}
                   className="w-20 border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                  title="Number of frames to capture (3-10)"
+                  title="Number of frames to capture (5-10)"
                 />
                 <span className="text-xs text-gray-500">
-                  More frames = better accuracy (recommended: 5-7)
+                  Recommended: 7 frames for best accuracy
                 </span>
               </div>
               <button
                 type="button"
                 onClick={capture}
-                className="bg-green-600 text-white px-4 py-2 rounded"
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-medium"
               >
-                Capture Face (Multi-frame)
+                📷 Capture Face (Multi-frame)
               </button>
             </div>
           ) : (
