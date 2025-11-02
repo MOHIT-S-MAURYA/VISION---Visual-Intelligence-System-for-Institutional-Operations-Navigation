@@ -1,0 +1,72 @@
+
+flowchart TD
+    Start([👤 User Opens Website]) --> Login{Is User<br/>Logged In?}
+    
+    Login -->|No| LoginPage[🔐 Login Page<br/>Enter Username & Password]
+    LoginPage --> Verify{Valid<br/>Credentials?}
+    Verify -->|No| LoginError[❌ Show Error Message]
+    LoginError --> LoginPage
+    Verify -->|Yes| Dashboard
+    
+    Login -->|Yes| Dashboard[📊 Dashboard<br/>Teacher/Admin Portal]
+    
+    Dashboard --> Choice{What do you<br/>want to do?}
+    
+    Choice -->|Register Student| RegStart[📝 Student Registration]
+    Choice -->|Mark Attendance| AttStart[✅ Mark Attendance]
+    Choice -->|View Reports| ReportStart[📈 View Reports]
+    
+    %% Student Registration Flow
+    RegStart --> RegForm[Fill Student Details:<br/>• Name<br/>• Department<br/>• Year<br/>• Roll Number optional]
+    RegForm --> Capture[📷 Capture Face Photos<br/>System takes 5-10 photos automatically]
+    Capture --> Quality{Photos<br/>Good Quality?}
+    Quality -->|No| QualityError[❌ Poor Quality<br/>Please retake in good lighting]
+    QualityError --> Capture
+    Quality -->|Yes| ProcessReg[🤖 AI Processing:<br/>1. Analyze face features<br/>2. Create digital fingerprint<br/>3. Store in database]
+    ProcessReg --> RegSuccess[✅ Student Registered!<br/>Roll Number: CSE-2025-00001]
+    RegSuccess --> Dashboard
+    
+    %% Attendance Marking Flow
+    AttStart --> SelectClass[Select:<br/>• Department CSE<br/>• Year First Year<br/>• Subject Programming in C]
+    SelectClass --> CreateSession[Create Attendance Session]
+    CreateSession --> StartCamera[📹 Start Camera<br/>Live video feed begins]
+    StartCamera --> Scanning[🔍 Continuous Scanning<br/>Looking for faces every 0.4 seconds]
+    
+    Scanning --> DetectFace{Face<br/>Detected?}
+    DetectFace -->|No| Scanning
+    DetectFace -->|Yes| Recognize[🤖 AI Recognition:<br/>1. Extract face features<br/>2. Compare with database<br/>3. Find matching student]
+    
+    Recognize --> Match{Match<br/>Found?}
+    Match -->|No| ShowRed[🔴 Red Box<br/>Unknown Person]
+    ShowRed --> Scanning
+    Match -->|Yes| AlreadyMarked{Already<br/>Marked Present?}
+    AlreadyMarked -->|Yes| ShowGreen[🟢 Green Box<br/>Already Present]
+    ShowGreen --> Scanning
+    AlreadyMarked -->|No| MarkPresent[✅ Mark Present<br/>Save to database]
+    MarkPresent --> ShowGreen2[🟢 Green Box + Name<br/>Rahul Kumar]
+    ShowGreen2 --> UpdateList[📋 Add to Present List]
+    UpdateList --> Scanning
+    
+    Scanning --> StopAtt{Teacher Stops<br/>Scanning?}
+    StopAtt -->|No| Scanning
+    StopAtt -->|Yes| EndSession[Session Ended<br/>Show Summary]
+    EndSession --> Dashboard
+    
+    %% Reports Flow
+    ReportStart --> SelectReport{Choose<br/>Report Type}
+    SelectReport -->|Session Report| SessionReport[📊 View Specific Session:<br/>• Date & Time<br/>• Subject<br/>• Present/Absent Students]
+    SelectReport -->|Student Report| StudentReport[📊 View Student History:<br/>• Attendance percentage<br/>• All sessions attended]
+    SessionReport --> ExportOption[💾 Export to Excel/PDF]
+    StudentReport --> ExportOption
+    ExportOption --> Dashboard
+    
+    %% Styling
+    style Start fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style Dashboard fill:#2196F3,stroke:#1565C0,color:#fff
+    style RegSuccess fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style MarkPresent fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style LoginError fill:#F44336,stroke:#C62828,color:#fff
+    style QualityError fill:#F44336,stroke:#C62828,color:#fff
+    style ShowRed fill:#F44336,stroke:#C62828,color:#fff
+    style ShowGreen fill:#4CAF50,stroke:#2E7D32,color:#fff
+    style ShowGreen2 fill:#4CAF50,stroke:#2E7D32,color:#fff

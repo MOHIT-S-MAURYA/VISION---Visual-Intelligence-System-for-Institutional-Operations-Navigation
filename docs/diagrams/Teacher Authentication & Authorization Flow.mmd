@@ -1,0 +1,63 @@
+sequenceDiagram
+    actor Teacher as Teacher (dr.sharma)
+    participant UI as React Frontend
+    participant Django as Django Backend<br/>(TokenObtainPairView)
+    participant DB as SQLite Database
+    participant Auth as JWT Middleware
+
+    Teacher->>UI: 1. Opens Login Page
+    Teacher->>UI: 2. Enters credentials<br/>Username: dr.sharma<br/>Password: teacher123
+    
+    UI->>Django: 3. POST /api/token/<br/>{username, password}
+    
+    activate Django
+    Django->>DB: 4. Query User table<br/>WHERE username='dr.sharma'
+    DB-->>Django: User found (id=2)
+    
+    Django->>Django: 5. Verify password hash
+    
+    alt Password Valid
+        Django->>Django: 6. Generate JWT tokens:<br/>- access_token (5min expiry)<br/>- refresh_token (24hr expiry)
+        Django-->>UI: 200 OK<br/>{access: "eyJ...", refresh: "eyJ..."}
+        
+        UI->>UI: 7. Store tokens in localStorage
+        UI->>Teacher: Redirect to Dashboard
+    else Password Invalid
+        Django-->>UI: 401 Unauthorized<br/>{detail: "Invalid credentials"}
+        UI->>Teacher: Show error message
+    end
+    deactivate Django
+    
+    Note over Teacher,DB: Protected API Request
+    
+    Teacher->>UI: 8. Clicks "Students" page
+    UI->>Django: 9. GET /api/students/<br/>Authorization: Bearer eyJ...
+    
+    activate Django
+    Django->>Auth: 10. Validate JWT token
+    
+    activate Auth
+    Auth->>Auth: 11. Verify signature & expiry
+    
+    alt Token Valid
+        Auth->>Auth: 12. Extract user_id from token payload
+        Auth->>DB: 13. Get User(id=2) & check is_active
+        DB-->>Auth: User active
+        Auth-->>Django: Authentication successful (user=dr.sharma)
+        
+        Django->>DB: 14. Query Students (with department filtering)
+        DB-->>Django: List of students
+        Django-->>UI: 200 OK {students: [...]}
+        UI->>Teacher: Display students list
+    else Token Expired
+        Auth-->>Django: Token expired
+        Django-->>UI: 401 Unauthorized<br/>{detail: "Token expired"}
+        UI->>UI: Clear localStorage
+        UI->>Teacher: Redirect to login
+    else Token Invalid
+        Auth-->>Django: Invalid token
+        Django-->>UI: 401 Unauthorized<br/>{detail: "Invalid token"}
+        UI->>Teacher: Show error
+    end
+    deactivate Auth
+    deactivate Django

@@ -1,0 +1,33 @@
+flowchart TD
+    Start([Student Registration Form Submitted]) --> CheckRoll{Roll Number<br/>Provided?}
+    
+    CheckRoll -->|Yes| UseManual[Use Provided Roll Number<br/>e.g., CUSTOM-2024-001]
+    CheckRoll -->|No| AutoGen[Auto-Generate Roll Number]
+    
+    AutoGen --> GetDept[Get Department Code<br/>e.g., CSE]
+    GetDept --> GetYear[Get Current Year<br/>e.g., 2025]
+    GetYear --> QueryDB[Query Database:<br/>SELECT roll_number<br/>FROM students<br/>WHERE roll_number LIKE 'CSE-2025-%'<br/>ORDER BY roll_number DESC<br/>LIMIT 1]
+    
+    QueryDB --> CheckLast{Last Student<br/>Found?}
+    
+    CheckLast -->|Yes| Extract[Extract sequence number<br/>e.g., CSE-2025-00005 → 5]
+    Extract --> Increment[Increment: 5 + 1 = 6]
+    
+    CheckLast -->|No| FirstStudent[This is first student<br/>Sequence = 1]
+    
+    Increment --> Format[Format: CSE-2025-00006<br/>Zero-padded to 5 digits]
+    FirstStudent --> FormatFirst[Format: CSE-2025-00001]
+    
+    Format --> Save
+    FormatFirst --> Save
+    UseManual --> Save[Save to Database]
+    
+    Save --> ValidateUnique{Is Roll Number<br/>Unique?}
+    
+    ValidateUnique -->|Yes| Success([✅ Student Created])
+    ValidateUnique -->|No| Error([❌ Error: Duplicate Roll Number])
+    
+    style Start fill:#4CAF50,color:#fff
+    style Success fill:#4CAF50,color:#fff
+    style Error fill:#F44336,color:#fff
+    style AutoGen fill:#2196F3,color:#fff

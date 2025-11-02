@@ -1,0 +1,62 @@
+sequenceDiagram
+    actor Teacher as Teacher/Admin
+    participant UI as React Frontend<br/>(Registration.jsx)
+    participant Django as Django Backend<br/>(StudentViewSet)
+    participant DB as SQLite Database
+    participant FastAPI as FastAPI AI Service<br/>(main.py)
+    participant FR as FaceRecognitionSystem<br/>(face_recognition.py)
+    participant FAISS as FAISS HNSW Index
+
+    Teacher->>UI: 1. Opens Registration Page
+    Teacher->>UI: 2. Fills Form (Name, Dept, Year)<br/>Roll Number: Optional
+    Teacher->>UI: 3. Clicks "Capture Face"
+    
+    UI->>UI: 4. Captures 5-10 frames from webcam<br/>(640x480, 150ms intervals)
+    Note over UI: Frames stored in state as base64
+    
+    Teacher->>UI: 5. Reviews captured frames
+    Teacher->>UI: 6. Clicks "Register Student"
+    
+    UI->>Django: 7. POST /api/students/register_with_face/<br/>{name, department, class_year, frames[]}
+    
+    activate Django
+    Django->>Django: 8. Validate input data
+    Django->>DB: 9. Create Student record<br/>Auto-generate roll_number if empty<br/>(Format: DEPT-YEAR-XXXXX)
+    DB-->>Django: Returns student (id=42)
+    
+    Django->>FastAPI: 10. POST /api/face/register_multi/<br/>{student_id: "42", files: [frame_0.jpg...]}
+    deactivate Django
+    
+    activate FastAPI
+    FastAPI->>FR: 11. Call register_face_multi(student_id, frames)
+    
+    activate FR
+    FR->>FR: 12. Quality Assessment Loop:<br/>- Calculate sharpness (Laplacian)<br/>- Check brightness (mean)<br/>- Measure face size<br/>- Get detection confidence<br/>Score = 0.4*sharp + 0.25*bright + 0.2*size + 0.15*conf
+    
+    alt Quality < 0.65 (65%)
+        FR-->>FastAPI: Reject: "Quality too low"
+        FastAPI-->>Django: 400 Error: Quality insufficient
+        Django-->>UI: Error: "Image quality below threshold"
+        UI->>Teacher: Show error message
+    else Quality >= 0.65
+        FR->>FR: 13. Select top 5 highest quality frames
+        FR->>FR: 14. For each frame:<br/>- Detect face using SCRFD<br/>- Extract 512D embedding using ArcFace
+        FR->>FR: 15. Aggregate embeddings (mean pooling)
+        FR->>FR: 16. L2-normalize aggregated embedding
+        FR->>FAISS: 17. Add embedding to HNSW index<br/>student_ids.append("42")
+        FAISS-->>FR: Index updated
+        FR->>FR: 18. Save FAISS index to disk<br/>(faiss_index/index.faiss)
+        FR-->>FastAPI: Success {embedding_id: "42", frames_processed: 5}
+        deactivate FR
+        
+        FastAPI-->>Django: 200 OK {embedding_id: "42"}
+        deactivate FastAPI
+        
+        activate Django
+        Django->>DB: 19. Update Student:<br/>face_embedding_id = "42"
+        DB-->>Django: Updated
+        Django-->>UI: 200 OK {message: "Student registered", roll_number: "CSE-2025-00001"}
+        deactivate Django
+        
+        UI->>Teacher: ✅ Success: "Student registered successfully"
+    end

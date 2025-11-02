@@ -1,0 +1,99 @@
+sequenceDiagram
+    actor Teacher
+    participant UI as React Frontend<br/>(Attendance.jsx)
+    participant Django as Django Backend<br/>(AttendanceSessionViewSet)
+    participant DB as SQLite Database
+    participant FastAPI as FastAPI AI Service<br/>(main.py)
+    participant FR as FaceRecognitionSystem
+    participant FAISS as FAISS HNSW Index
+
+    Teacher->>UI: 1. Login as Teacher (dr.sharma)
+    UI->>Django: 2. GET /api/teacher-assignments/my_teaching_options/
+    Django->>DB: Query teacher's departments & subjects
+    DB-->>Django: {departments: [CSE], years: [First, Second], subjects: [...]}
+    Django-->>UI: Teacher's assigned data
+    UI->>UI: Populate dropdowns (Dept, Year, Subject)
+    
+    Teacher->>UI: 3. Selects: CSE, First Year, Programming in C
+    Teacher->>UI: 4. Clicks "Create Session"
+    UI->>Django: 5. POST /api/attendance/sessions/<br/>{department: "CSE", class_year: "First Year", subject_id: 1}
+    Django->>DB: Create AttendanceSession (id=10, status="created")
+    Django-->>UI: Session created {id: 10}
+    
+    Teacher->>UI: 6. Clicks "Start Session"
+    UI->>Django: 7. PATCH /api/attendance/sessions/10/start/
+    Django->>DB: Update session.status = "active"
+    Django-->>UI: Session started
+    
+    Teacher->>UI: 8. Clicks "Start Recognition"
+    UI->>UI: 9. Initialize webcam (1280x720, 30fps)
+    UI->>UI: 10. Start detection loop (interval: 400ms)
+    
+    Note over UI,FAISS: Continuous Recognition Loop (every 400ms)
+    
+    loop Every 400ms
+        UI->>UI: 11. Capture current video frame
+        UI->>UI: 12. Convert canvas to base64 image
+        
+        UI->>Django: 13. POST /api/attendance/sessions/10/recognize_frame/<br/>{image: base64_encoded_frame}
+        
+        activate Django
+        Django->>FastAPI: 14. POST /api/face/recognize_frame/<br/>{file: frame.jpg}
+        deactivate Django
+        
+        activate FastAPI
+        FastAPI->>FR: 15. Call recognize_faces_in_image(frame)
+        
+        activate FR
+        FR->>FR: 16. Detect ALL faces in frame (SCRFD)<br/>Returns: list of face objects
+        
+        alt No faces detected
+            FR-->>FastAPI: Empty list
+            FastAPI-->>Django: {recognized_faces: [], unknown_faces: []}
+        else Faces detected
+            FR->>FR: 17. Extract embeddings for all faces (batch)
+            FR->>FR: 18. L2-normalize all embeddings
+            FR->>FAISS: 19. Batch search in HNSW index<br/>index.search(embeddings, k=1)
+            FAISS-->>FR: Returns distances and indices for all faces
+            
+            FR->>FR: 20. For each face:<br/>Convert distance to similarity<br/>If similarity >= 0.7 then Recognized<br/>Else Unknown
+            
+            FR-->>FastAPI: {recognized_faces: [{student_id, similarity, bbox}],<br/>unknown_faces: [{bbox}]}
+        end
+        deactivate FR
+        
+        FastAPI-->>Django: Recognition results
+        deactivate FastAPI
+        
+        activate Django
+        loop For each recognized student
+            Django->>DB: 21. Get Student(id=5)
+            DB-->>Django: {name: "Rahul Kumar", roll_number: "CSE-2025-00001"}
+            
+            Django->>DB: 22. AttendanceRecord.objects.get_or_create<br/>(session_id=10, student_id=5)
+            
+            alt New Record
+                DB-->>Django: Created new record
+                Note over Django: First time marked in this session
+            else Existing Record
+                DB-->>Django: Record exists (already present)
+                Note over Django: Skip duplicate marking
+            end
+        end
+        
+        Django-->>UI: 23. {recognized_faces: [{name, roll_number, bbox, similarity}],<br/>unknown_faces: [{bbox}]}
+        deactivate Django
+        
+        UI->>UI: 24. Draw bounding boxes on video:<br/>Green box with name for recognized<br/>Red box with "Unknown" for unrecognized
+        
+        UI->>UI: 25. Update "Present Students" list on right panel
+    end
+    
+    Teacher->>UI: 26. Clicks "Stop Recognition"
+    UI->>UI: Stop detection loop & webcam
+    
+    Teacher->>UI: 27. Clicks "End Session"
+    UI->>Django: 28. PATCH /api/attendance/sessions/10/end/
+    Django->>DB: Update session.status = "completed"
+    Django-->>UI: Session ended
+    UI->>Teacher: Show final attendance summary
